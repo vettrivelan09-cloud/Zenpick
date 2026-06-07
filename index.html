@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zenpick | Free AI Image Enhancer, Editor & Upscaler — No Sign-In, No Watermark</title>
+  <meta name="description"
+    content="Zenpick is a 100% free browser-based AI image enhancer, editor, and upscaler. Enhance image quality, upscale photos to 4K & 8K, sharpen blurry images, and restore old photos online — no sign-in, no watermark. Fast, private, secure." />
+  <meta name="keywords"
+    content="image enhance website, AI image editor, free image editor, image upscaling, AI image enhancer, free image upscaler, upscale image free, enhance image quality, free online image enhancer, best AI image enhancer, online photo enhancer, free photo editor, sharpen blurry image free, restore old photos online, browser image upscaler, Zenpick" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Zenpick" />
+  <link rel="canonical" href="https://zenpick.app" />
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Zenpick | Free AI Image Enhancer, Editor & Upscaler — No Watermark" />
+  <meta property="og:description"
+    content="Enhance, edit, and upscale photos to 8K, 4K, 1080p for free with Zenpick. No sign-in, no watermark, unlimited use. 100% browser-based AI processing." />
+  <meta property="og:site_name" content="Zenpick" />
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Zenpick — Free AI Image Enhancer & Editor" />
+  <meta name="twitter:description"
+    content="100% free AI image enhancer and editor by Zenpick. No sign-in, no watermark, unlimited image upscale to 4K & 8K. Browser-based, private, fast." />
+  <!-- Structured Data for Google -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Zenpick",
+    "url": "https://zenpick.app",
+    "description": "Zenpick is a 100% free professional-grade AI image enhancer, editor, and upscaler. Upscale and enhance images to 8K, 4K, 1080p quality directly in your browser. No sign-in required, no watermark, unlimited use.",
+    "applicationCategory": "DesignApplication",
+    "operatingSystem": "Any",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": ["Free AI image enhancer", "AI image editor", "Free image editor", "Image upscaling website", "No sign-in required", "No watermark", "Unlimited image upscale", "8K upscaling", "4K upscaling", "AI-powered enhancement", "Browser-based processing", "Restore old photos", "Sharpen blurry image"]
+  }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Processing Mode Selector ── */
+    .proc-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .proc-mode-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 14px 10px 12px;
+      border: 2px solid var(--border, #2a2a3a);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.18s, background 0.18s, transform 0.12s;
+      background: var(--card-bg, #12121e);
+      gap: 4px;
+      user-select: none;
+    }
+
+    .proc-mode-card input[type=radio] {
+      display: none;
+    }
+
+    .proc-mode-card:hover {
+      border-color: #7c6aff;
+      transform: translateY(-1px);
+    }
+
+    .proc-mode-card.selected,
+    .proc-mode-card:has(input:checked) {
+      border-color: #7c6aff;
+      background: rgba(124, 106, 255, 0.10);
+      box-shadow: 0 0 0 1px #7c6aff40;
+    }
+
+    .proc-mode-icon {
+      font-size: 1.5rem;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .proc-mode-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text, #fff);
+    }
+
+    .proc-mode-sub {
+      font-size: 0.70rem;
+      color: var(--text-muted, #888);
+      margin-bottom: 3px;
+    }
+
+    .proc-mode-desc {
+      font-size: 0.68rem;
+      color: var(--text-muted, #888);
+      line-height: 1.4;
+    }
+
+    .proc-mode-badge {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      font-size: 0.58rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+    }
+
+    .proc-badge-fast {
+      background: #1a3a1a;
+      color: #4ade80;
+      border: 1px solid #4ade8066;
+    }
+
+    .proc-badge-ai {
+      background: #1a1a3a;
+      color: #818cf8;
+      border: 1px solid #818cf866;
+    }
+
+    .proc-badge-max {
+      background: #3a1a2a;
+      color: #f472b6;
+      border: 1px solid #f472b666;
+    }
+
+    @media (max-width: 520px) {
+      .proc-mode-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <!-- ONNX Runtime Web for Real-ESRGAN AI Upscaling (runs on user's GPU/CPU) -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <!-- gifenc: lightweight GIF encoder for animated GIF output -->
+  <script>
+    // Provide a CommonJS-like exports shim so gifenc.js can self-register
+    window.__gifencExports = {};
+    var exports = window.__gifencExports;
+    var module = { exports: window.__gifencExports };
+  </script>
+  <script src="gifenc.js"></script>
+  <script>
+    // After gifenc.js loads, expose its functions as window.gifenc
+    window.gifenc = window.__gifencExports;
+  </script>
+</head>
+
+<body>
+  <!-- ===== SPLASH SCREEN ===== -->
+  <div id="splash-screen">
+    <div class="splash-content">
+      <div class="splash-logo-ring">
+        <div class="splash-ring ring-1"></div>
+        <div class="splash-ring ring-2"></div>
+        <div class="splash-ring ring-3"></div>
+        <img src="zenpick-logo.png" alt="Zenpick" class="splash-logo-img" />
+      </div>
+      <h2 class="splash-title">Zenpick</h2>
+      <p class="splash-tagline">AI Image Enhancer & Editor</p>
+      <div class="splash-loader">
+        <div class="splash-loader-bar"></div>
+      </div>
+    </div>
+  </div>
+  <!-- ===== NAVBAR ===== -->
+  <nav id="navbar">
+    <div class="nav-brand">
+      <img src="zenpick-logo.png" alt="Zenpick" class="nav-logo-img" />
+      <span class="nav-title">Zenpick</span>
+    </div>
+    <div class="nav-links">
+      <a href="#upload-section">Upload</a>
+      <a href="#features-section">Features</a>
+      <span class="nav-badge">100% Browser-Based</span>
+    </div>
+  </nav>
+
+  <!-- ===== HERO ===== -->
+  <header id="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-particles">
+      <div class="particle p1"></div>
+      <div class="particle p2"></div>
+      <div class="particle p3"></div>
+      <div class="particle p4"></div>
+      <div class="particle p5"></div>
+      <div class="particle p6"></div>
+      <div class="particle p7"></div>
+      <div class="particle p8"></div>
+      <div class="particle p9"></div>
+      <div class="particle p10"></div>
+      <div class="particle p11"></div>
+      <div class="particle p12"></div>
+    </div>
+    <!-- Animated Mascot Characters with Eye Tracking -->
+    <div class="hero-mascot mascot-1" aria-hidden="true">
+      <div class="mascot-body">
+        <div class="mascot-eye mascot-eye-left">
+          <div class="mascot-pupil"></div>
+        </div>
+        <div class="mascot-eye mascot-eye-right">
+          <div class="mascot-pupil"></div>
+        </div>
+        <div class="mascot-sparkle s1">✦</div>
+        <div class="mascot-sparkle s2">✧</div>
+        <div class="mascot-sparkle s3">✦</div>
+        <div class="mascot-trail"></div>
+      </div>
+    </div>
+    <div class="hero-mascot mascot-2" aria-hidden="true">
+      <div class="mascot-body mascot-body-cyan">
+        <div class="mascot-eye mascot-eye-left">
+          <div class="mascot-pupil"></div>
+        </div>
+        <div class="mascot-eye mascot-eye-right">
+          <div class="mascot-pupil"></div>
+        </div>
+        <div class="mascot-sparkle s1">✧</div>
+        <div class="mascot-sparkle s2">✦</div>
+        <div class="mascot-trail"></div>
+      </div>
+    </div>
+    <div class="hero-mascot mascot-3" aria-hidden="true">
+      <div class="mascot-body mascot-body-pink">
+        <div class="mascot-eye mascot-eye-left">
+          <div class="mascot-pupil"></div>
+        </div>
+        <div class="mascot-eye mascot-eye-right">
+          <div class="mascot-pupil"></div>
+        </div>
+        <div class="mascot-sparkle s1">✦</div>
+        <div class="mascot-sparkle s3">✧</div>
+        <div class="mascot-trail"></div>
+      </div>
+    </div>
+    <div class="hero-content">
+      <span class="hero-chip">✦ AI-Powered Image Enhancement Engine</span>
+      <h1 class="hero-title-main">
+        <span class="hero-line hero-line-1">Free AI Image Enhancer</span>
+        <span class="hero-line hero-line-2">&amp; Photo Editor Online</span>
+      </h1>
+      <div class="hero-tagline">
+        <span class="tagline-badge">✓ No Sign-In</span>
+        <span class="tagline-divider">·</span>
+        <span class="tagline-badge">✓ No Watermark</span>
+        <span class="tagline-divider">·</span>
+        <span class="tagline-badge">✓ 100% Free</span>
+      </div>
+      <p class="hero-sub">Upscale and enhance your photos &amp; images to stunning <strong>8K, 4K, 1080p</strong>
+        quality with AI-powered processing — completely free, unlimited, and private in your browser.</p>
+      <div class="hero-actions">
+        <button id="hero-upload-btn" class="btn btn-primary btn-lg hero-cta-btn">
+          <span class="btn-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </span>
+          Upload Image
+        </button>
+        <button class="btn btn-ghost btn-lg"
+          onclick="document.getElementById('features-section').scrollIntoView({behavior:'smooth'})">
+          Explore Features ↓
+        </button>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-num">8K</span><span class="stat-label">Max Resolution</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><span class="stat-num">15+</span><span class="stat-label">AI Filters</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><span class="stat-num">0$</span><span class="stat-label">Forever Free</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== FEATURES SECTION ===== -->
+  <section id="features-section">
+    <h2 class="section-title">Powerful <span class="gradient-text">Features</span></h2>
+    <p class="section-sub">Everything you need to make your images look incredible</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>Super Resolution</h3>
+        <p>Upscale images up to 8K resolution with intelligent pixel reconstruction.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎨</div>
+        <h3>Color Enhancement</h3>
+        <p>Boost saturation, vibrance, and color depth for vivid results.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">✨</div>
+        <h3>AI Sharpening</h3>
+        <p>Intelligently sharpen edges and details without artifacts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌙</div>
+        <h3>Noise Reduction</h3>
+        <p>Remove grain and noise while preserving natural textures.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖼️</div>
+        <h3>Artwork Optimization</h3>
+        <p>Enhance illustrations, digital paintings, anime art, and sketches.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👤</div>
+        <h3>Face Enhancement</h3>
+        <p>Automatically detect and enhance facial features in photos.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ===== MAIN APP ===== -->
+  <main id="upload-section">
+
+    <div class="app-container">
+      <!-- STEP 1: UPLOAD -->
+      <div id="step-upload" class="step active">
+        <h2 class="section-title">Start <span class="gradient-text">Enhancing</span></h2>
+        <p class="section-sub">Upload your image to begin</p>
+
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-zone-scan-line"></div>
+          <div class="drop-zone-corner tl"></div>
+          <div class="drop-zone-corner tr"></div>
+          <div class="drop-zone-corner bl"></div>
+          <div class="drop-zone-corner br"></div>
+          <div class="drop-zone-inner">
+            <div class="drop-icon">
+              <div class="drop-icon-ring"></div>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+            <h3>Drag &amp; Drop your image here</h3>
+            <p class="drop-subtitle">or click anywhere to browse files</p>
+            <div class="supported-formats">
+              <span class="format-badge">JPG</span>
+              <span class="format-badge">PNG</span>
+              <span class="format-badge">WebP</span>
+              <span class="format-badge">GIF</span>
+              <span class="format-badge">BMP</span>
+              <span class="format-badge">HEIC</span>
+            </div>
+            <div class="drop-hint">🔒 Your files never leave your device</div>
+          </div>
+          <input type="file" id="file-input" accept="image/*" hidden />
+        </div>
+      </div>
+
+      <!-- STEP 2: CONFIGURE -->
+      <div id="step-configure" class="step">
+        <div class="configure-layout">
+          <!-- Left: Preview -->
+          <div class="preview-panel">
+            <div class="panel-header">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: text-bottom;">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                Original Preview
+              </h3>
+              <div class="panel-header-actions">
+                <button id="btn-fullscreen-preview" class="btn btn-sm btn-glass-action" title="View Fullscreen">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                      d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  </svg>
+                  Fullscreen
+                </button>
+                <button id="btn-change-file" class="btn btn-sm btn-glass-action">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <path d="M2 15h10" />
+                    <path d="m9 18 3-3-3-3" />
+                  </svg>
+                  Change File
+                </button>
+              </div>
+            </div>
+            <div class="preview-area" id="preview-area">
+              <img id="preview-image" alt="Preview" />
+              <!-- Compare: 'Original' label overlay (shown when holding Compare button) -->
+              <div id="compare-original-label" class="compare-original-label" style="display:none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Original
+              </div>
+            </div>
+
+            <!-- Preview Actions (e.g. Compare Button) directly below video -->
+            <div class="preview-actions"
+              style="display: flex; justify-content: center; margin-top: 12px; margin-bottom: 20px;">
+              <button id="btn-compare-original" class="btn btn-sm btn-glass-action btn-compare-original"
+                title="Hold to see original">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12c-2.4 4-5.4 6-9 6-3.6 0-6.6-2-9-6 2.4-4 5.4-6 9-6 3.6 0 6.6 2 9 6Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 5v14" />
+                </svg>
+                <span>Compare</span>
+              </button>
+            </div>
+            <!-- File Info Card -->
+            <div id="file-info-card" class="info-card">
+              <div class="info-card-header"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                <span class="info-card-title"
+                  style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16h16V8l-6-6Z" />
+                    <path d="M14 2v6h6" />
+                    <path d="M12 11v6" />
+                    <path d="M9.5 14.5 12 17l2.5-2.5" />
+                  </svg>
+                  File Details
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  File Name
+                </span>
+                <span id="info-name" class="info-value">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <path
+                      d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                  Dimensions
+                </span>
+                <span id="info-dimensions" class="info-value">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                  </svg>
+                  File Size
+                </span>
+                <span id="info-size" class="info-value">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                    <line x1="7" y1="2" x2="7" y2="22" />
+                    <line x1="17" y1="2" x2="17" y2="22" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <line x1="2" y1="7" x2="7" y2="7" />
+                    <line x1="2" y1="17" x2="7" y2="17" />
+                    <line x1="17" y1="17" x2="22" y2="17" />
+                    <line x1="17" y1="7" x2="22" y2="7" />
+                  </svg>
+                  Type
+                </span>
+                <span id="info-type" class="info-value">—</span>
+              </div>
+            </div>
+
+            <!-- ===== SYSTEM REPORT CARD (Hardware Guard) ===== -->
+            <div id="system-report-card" class="system-report-card" style="display: none;">
+              <div class="sys-report-header">
+                <span class="sys-report-icon">🚀</span>
+                <div class="sys-report-text">
+                  <span class="sys-report-label">Analyzing Hardware...</span>
+                  <p class="sys-report-desc">Detecting your device capabilities...</p>
+                </div>
+              </div>
+              <div class="sys-report-stats">
+                <div class="sys-stat">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
+                    <path d="M7 2v20" />
+                    <path d="M17 2v20" />
+                    <path d="M2 12h20" />
+                  </svg>
+                  <span class="sys-stat-value sys-stat-ram">—</span>
+                </div>
+                <div class="sys-stat">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 20V10" />
+                    <path d="M12 20V4" />
+                    <path d="M6 20v-6" />
+                  </svg>
+                  <span class="sys-stat-value sys-stat-cores">—</span>
+                </div>
+                <div class="sys-stat">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <span class="sys-stat-value sys-stat-gpu">—</span>
+                </div>
+                <div class="sys-stat sys-stat-engine-wrap">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  <span class="sys-stat-value sys-stat-engine">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== AI SMART RESOLUTION CARD (auto-detected after video upload) ===== -->
+            <div id="ai-resolution-card" class="ai-resolution-card" style="display: none;">
+              <div class="ai-res-detected">
+                <span class="ai-res-icon" id="ai-res-icon">📹</span>
+                <span class="ai-res-label" id="ai-res-label">Analyzing your video…</span>
+              </div>
+              <div class="ai-res-body">
+                <div class="ai-res-section">
+                  <span class="ai-res-sparkle">✨</span>
+                  <strong>What will happen:</strong>
+                </div>
+                <p class="ai-res-description" id="ai-res-description"></p>
+                <div class="ai-res-section">
+                  <span class="ai-res-chart">📊</span>
+                  <strong>Result:</strong> <span id="ai-res-result-text">Genuine quality improvement</span>
+                </div>
+                <p class="ai-res-result-desc" id="ai-res-result-desc"></p>
+                <div class="ai-res-section">
+                  <span class="ai-res-clock">⏱️</span>
+                  <strong>Time:</strong> Depends on your device
+                </div>
+                <div class="ai-res-time-details" id="ai-res-time-details">
+                  <span>Fast PC with GPU: ~5 min</span>
+                  <span>Normal laptop: ~15–20 min</span>
+                  <span>Keep this tab open during processing.</span>
+                </div>
+              </div>
+              <button id="ai-enhance-cta" class="btn btn-primary btn-lg ai-enhance-cta">
+                <span class="btn-icon">✨</span>
+                <span id="ai-enhance-cta-text">Start AI Upscaling</span>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Right: Settings -->
+          <div class="settings-panel">
+            <!-- Quality Selection -->
+            <div class="settings-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: text-bottom;">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+                Target Quality
+              </h3>
+              <p class="settings-desc">Choose the output resolution for your media</p>
+              <div class="quality-grid">
+                <label class="quality-option" data-quality="8k">
+                  <input type="radio" name="quality" value="8k" />
+                  <div class="quality-card">
+                    <span class="quality-res">8K</span>
+                    <span class="quality-px" id="res-8k">7680×4320</span>
+                    <span class="quality-tag tag-premium">Ultra Premium</span>
+                  </div>
+                </label>
+                <label class="quality-option" data-quality="4k">
+                  <input type="radio" name="quality" value="4k" checked />
+                  <div class="quality-card">
+                    <span class="quality-res">4K</span>
+                    <span class="quality-px" id="res-4k">3840×2160</span>
+                    <span class="quality-tag tag-recommended">Recommended</span>
+                  </div>
+                </label>
+                <label class="quality-option" data-quality="1080p">
+                  <input type="radio" name="quality" value="1080p" />
+                  <div class="quality-card">
+                    <span class="quality-res">1080p</span>
+                    <span class="quality-px" id="res-1080p">1920×1080</span>
+                    <span class="quality-tag tag-standard">Full HD</span>
+                  </div>
+                </label>
+                <label class="quality-option" data-quality="720p">
+                  <input type="radio" name="quality" value="720p" />
+                  <div class="quality-card">
+                    <span class="quality-res">720p</span>
+                    <span class="quality-px" id="res-720p">1280×720</span>
+                    <span class="quality-tag tag-compact">HD Ready</span>
+                  </div>
+                </label>
+                <label class="quality-option" data-quality="original">
+                  <input type="radio" name="quality" value="original" />
+                  <div class="quality-card">
+                    <span class="quality-res">Original</span>
+                    <span class="quality-px">Keep size</span>
+                    <span class="quality-tag tag-custom">No Upscale</span>
+                  </div>
+                </label>
+              </div>
+              <!-- Custom resolution inputs -->
+              <div id="custom-res-panel" class="custom-res-panel" style="display:none;">
+                <div class="custom-res-inputs">
+                  <div class="input-group">
+                    <label for="custom-width">Width (px)</label>
+                    <input type="number" id="custom-width" value="3840" min="100" max="15360" />
+                  </div>
+                  <span class="custom-res-x">×</span>
+                  <div class="input-group">
+                    <label for="custom-height">Height (px)</label>
+                    <input type="number" id="custom-height" value="2160" min="100" max="8640" />
+                  </div>
+                  <label class="aspect-lock">
+                    <input type="checkbox" id="lock-aspect" checked /> 🔒 Lock Aspect Ratio
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Enhancement Filters -->
+            <div class="settings-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: text-bottom;">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                Enhancement Filters
+              </h3>
+              <div class="filters-grid">
+                <label class="filter-toggle" id="filter-sharpen">
+                  <input type="checkbox" name="filter" value="sharpen" checked />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="14 2 18 6 7 17 3 17 3 13 14 2"></polygon>
+                        <line x1="3" y1="22" x2="21" y2="22"></line>
+                      </svg></span>
+                    <span class="filter-name">Sharpen</span>
+                    <span class="filter-desc">Restore edges & details</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-denoise">
+                  <input type="checkbox" name="filter" value="denoise" checked />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                          d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                        </path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                      </svg></span>
+                    <span class="filter-name">Denoise</span>
+                    <span class="filter-desc">Remove grain & noise</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-hdr">
+                  <input type="checkbox" name="filter" value="hdr" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                      </svg></span>
+                    <span class="filter-name">HDR Effect</span>
+                    <span class="filter-desc">Dynamic range boost</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-color">
+                  <input type="checkbox" name="filter" value="color" checked />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                      </svg></span>
+                    <span class="filter-name">Color Boost</span>
+                    <span class="filter-desc">Vibrance & saturation</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-face">
+                  <input type="checkbox" name="filter" value="face" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg></span>
+                    <span class="filter-name">Face Enhance</span>
+                    <span class="filter-desc">Improve facial details</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-contrast">
+                  <input type="checkbox" name="filter" value="contrast" checked />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 2a10 10 0 0 0 0 20z"></path>
+                      </svg></span>
+                    <span class="filter-name">Auto Contrast</span>
+                    <span class="filter-desc">Balance light & dark</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-brightness">
+                  <input type="checkbox" name="filter" value="brightness" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                      </svg></span>
+                    <span class="filter-name">Brightness</span>
+                    <span class="filter-desc">Lighten dark areas</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-vignette">
+                  <input type="checkbox" name="filter" value="vignette" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <circle cx="12" cy="12" r="4"></circle>
+                      </svg></span>
+                    <span class="filter-name">Vignette</span>
+                    <span class="filter-desc">Artistic edge darken</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-warmth">
+                  <input type="checkbox" name="filter" value="warmth" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path>
+                      </svg></span>
+                    <span class="filter-name">Warm Tone</span>
+                    <span class="filter-desc">Golden warm colors</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-cool">
+                  <input type="checkbox" name="filter" value="cool" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2.35 9.07l1.7-1a9 9 0 0 1 15.9 0l1.7 1"></path>
+                        <path d="M12 2v20"></path>
+                        <path d="M22 6l-20 12"></path>
+                        <path d="M2 6l20 12"></path>
+                      </svg></span>
+                    <span class="filter-name">Cool Tone</span>
+                    <span class="filter-desc">Blue cool colors</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-bw">
+                  <input type="checkbox" name="filter" value="bw" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="3" y1="9" x2="21" y2="9"></line>
+                        <line x1="9" y1="21" x2="9" y2="9"></line>
+                      </svg></span>
+                    <span class="filter-name">B&W Convert</span>
+                    <span class="filter-desc">Classic monochrome</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-curves">
+                  <input type="checkbox" name="filter" value="curves" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                      </svg></span>
+                    <span class="filter-name">Color Curves</span>
+                    <span class="filter-desc">Warm to Cool tint</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-skin">
+                  <input type="checkbox" name="filter" value="skin" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                          d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg></span>
+                    <span class="filter-name">Skin Smooth</span>
+                    <span class="filter-desc">Soften face details</span>
+                  </div>
+                </label>
+                <label class="filter-toggle" id="filter-texture">
+                  <input type="checkbox" name="filter" value="texture" />
+                  <div class="filter-card">
+                    <span class="filter-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
+                        <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle>
+                        <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle>
+                        <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle>
+                        <path
+                          d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.554-5.554C21.965 6.012 17.461 2 12 2z">
+                        </path>
+                      </svg></span>
+                    <span class="filter-name">Texture Smooth</span>
+                    <span class="filter-desc">Smooth backgrounds</span>
+                  </div>
+                </label>
+              </div>
+              <div class="filters-toggle-wrapper">
+                <button id="btn-toggle-filters" class="btn btn-ghost btn-sm">Show More Options ↓</button>
+              </div>
+            </div>
+
+            <!-- Advanced Sliders -->
+            <div class="settings-section">
+              <div class="fine-tune-header">
+                <div class="fine-tune-header-top"
+                  style="display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.5rem;">
+                  <h3>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round"
+                      style="margin-right: 6px; vertical-align: text-bottom;">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                      </path>
+                    </svg>
+                    Fine-Tune Controls
+                  </h3>
+                  <button id="btn-reset-finetune" class="btn btn-ghost btn-sm"
+                    style="padding: 4px 8px; font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 0; transform: translateY(-2px);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </svg>
+                    Reset Defaults
+                  </button>
+                </div>
+                <div class="preset-controls">
+                  <button class="preset-btn fab-preset" id="fab-preset-auto"
+                    title="Intelligent Optimize — AI-balanced enhancement">
+                    <span class="preset-btn-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                          d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>
+                    </span>
+                    <span class="preset-btn-label">Intelligent Optimize</span>
+                  </button>
+                  <button class="preset-btn fab-preset" id="fab-preset-cinema"
+                    title="Cinematic Grade — Film-quality color grading">
+                    <span class="preset-btn-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                        <line x1="7" y1="2" x2="7" y2="22" />
+                        <line x1="17" y1="2" x2="17" y2="22" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <line x1="2" y1="7" x2="7" y2="7" />
+                        <line x1="2" y1="17" x2="7" y2="17" />
+                        <line x1="17" y1="17" x2="22" y2="17" />
+                        <line x1="17" y1="7" x2="22" y2="7" />
+                      </svg>
+                    </span>
+                    <span class="preset-btn-label">Cinematic Grade</span>
+                  </button>
+                  <button class="preset-btn fab-preset" id="fab-preset-portrait"
+                    title="Portrait Retouch — Optimized for faces & skin">
+                    <span class="preset-btn-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </span>
+                    <span class="preset-btn-label">Portrait Retouch</span>
+                  </button>
+                </div>
+              </div>
+              <div class="sliders-grid">
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Sharpness Intensity</span>
+                    <div class="slider-val-group">
+                      <span id="sharpness-val" class="slider-val">0%</span>
+                      <button class="btn-reset-slider" data-target="slider-sharpness" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-sharpness" min="0" max="100" value="0" class="range-slider" />
+                </div>
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Denoise Strength</span>
+                    <div class="slider-val-group">
+                      <span id="denoise-val" class="slider-val">0%</span>
+                      <button class="btn-reset-slider" data-target="slider-denoise" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-denoise" min="0" max="100" value="0" class="range-slider" />
+                </div>
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Color Saturation</span>
+                    <div class="slider-val-group">
+                      <span id="saturation-val" class="slider-val">0%</span>
+                      <button class="btn-reset-slider" data-target="slider-saturation" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-saturation" min="0" max="100" value="0" class="range-slider" />
+                </div>
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Brightness Adjust</span>
+                    <div class="slider-val-group">
+                      <span id="brightness-val" class="slider-val">0%</span>
+                      <button class="btn-reset-slider" data-target="slider-brightness" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-brightness" min="-50" max="50" value="0" class="range-slider" />
+                </div>
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Contrast</span>
+                    <div class="slider-val-group">
+                      <span id="contrast-val" class="slider-val">0%</span>
+                      <button class="btn-reset-slider" data-target="slider-contrast" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-contrast" min="-50" max="50" value="0" class="range-slider" />
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Skin Smoothing</span>
+                    <div class="slider-val-group">
+                      <span id="skin-smooth-val" class="slider-val">50%</span>
+                      <button class="btn-reset-slider" data-target="slider-skin" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-skin" min="0" max="100" value="0" class="range-slider" />
+                </div>
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Texture Smoothing</span>
+                    <div class="slider-val-group">
+                      <span id="texture-smooth-val" class="slider-val">20%</span>
+                      <button class="btn-reset-slider" data-target="slider-texture" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-texture" min="0" max="100" value="0" class="range-slider" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Advanced Options -->
+            <div class="settings-section advanced-options-wrapper">
+              <div class="advanced-header" id="advanced-toggle">
+                <h3>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <path
+                      d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                  Advanced Options
+                </h3>
+                <span class="advanced-chevron">▼</span>
+              </div>
+              <div class="advanced-content" id="advanced-content" style="display: none;">
+                <div class="sliders-grid">
+                  <div class="slider-item">
+                    <div class="slider-header">
+                      <span>Skin Sharpening <small>(Faces/Characters)</small></span>
+                      <div class="slider-val-group">
+                        <span id="skin-sharpen-val" class="slider-val">0%</span>
+                        <button class="btn-reset-slider" data-target="slider-skin-sharpen" data-default="0"
+                          title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                          </svg></button>
+                      </div>
+                    </div>
+                    <input type="range" id="slider-skin-sharpen" min="0" max="100" value="0" class="range-slider" />
+                  </div>
+                  <div class="slider-item">
+                    <div class="slider-header">
+                      <span>Clear Face <small>(Details)</small></span>
+                      <div class="slider-val-group">
+                        <span id="clear-face-val" class="slider-val">0%</span>
+                        <button class="btn-reset-slider" data-target="slider-clear-face" data-default="0"
+                          title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                          </svg></button>
+                      </div>
+                    </div>
+                    <input type="range" id="slider-clear-face" min="0" max="100" value="0" class="range-slider" />
+                  </div>
+                </div>
+
+                <!-- Advanced Enhance Slider -->
+                <div class="slider-item"
+                  style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                  <div class="slider-header">
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                          d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z" />
+                        <path d="m14 7 3 3" />
+                      </svg>
+                      Advanced Enhance <small>(Deep Processing)</small>
+                    </span>
+                    <div class="slider-val-group">
+                      <span id="advanced-enhance-val" class="slider-val">0%</span>
+                      <button class="btn-reset-slider" data-target="slider-advanced-enhance" data-default="0"
+                        title="Reset to default"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg></button>
+                    </div>
+                  </div>
+                  <input type="range" id="slider-advanced-enhance" min="0" max="100" value="0" class="range-slider" />
+                </div>
+
+
+
+
+                <div class="curves-editor-container">
+                  <div class="curves-header">
+                    <h4>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round"
+                        style="margin-right: 6px; vertical-align: text-bottom;">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                      </svg>
+                      RGB Curves Editing Option
+                    </h4>
+                    <select id="curve-channel-select" class="channel-select">
+                      <option value="rgb">RGB (Master)</option>
+                      <option value="r">Red</option>
+                      <option value="g">Green</option>
+                      <option value="b">Blue</option>
+                    </select>
+                  </div>
+                  <div class="curves-canvas-wrapper">
+                    <canvas id="curves-editor-canvas" width="256" height="256"></canvas>
+                    <button id="btn-reset-curves" class="btn btn-sm btn-ghost reset-curves-btn">Reset</button>
+                  </div>
+                  <p class="curves-hint">Click to add points, drag to adjust, double-click to remove.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ PROCESSING MODE SELECTOR ═══ -->
+            <div class="settings-section" id="processing-mode-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: text-bottom;">
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                Processing Mode
+              </h3>
+              <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 12px 0;line-height:1.5;">
+                Choose how your image is enhanced. Auto-detected by default.
+              </p>
+              <div class="proc-mode-grid" id="proc-mode-grid">
+
+                <!-- Option 1: Canvas -->
+                <label class="proc-mode-card" id="proc-card-canvas">
+                  <input type="radio" name="proc-mode" value="canvas" id="proc-canvas" />
+                  <div class="proc-mode-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                      style="margin-bottom: 4px; filter: drop-shadow(0 2px 8px rgba(251, 140, 0, 0.4));">
+                      <defs>
+                        <linearGradient id="canvas-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#ffb74d" />
+                          <stop offset="100%" stop-color="#f57c00" />
+                        </linearGradient>
+                      </defs>
+                      <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="url(#canvas-grad)" />
+                    </svg>
+                  </div>
+                  <div class="proc-mode-title">Canvas</div>
+                  <div class="proc-mode-sub">Fast · Seconds</div>
+                  <div class="proc-mode-desc">Best for real photos, people, products. Sharpens &amp; enhances detail
+                    instantly.</div>
+                  <div class="proc-mode-badge proc-badge-fast">FAST</div>
+                </label>
+
+                <!-- Option 2: ONNX AI -->
+                <label class="proc-mode-card" id="proc-card-onnx">
+                  <input type="radio" name="proc-mode" value="onnx" id="proc-onnx" />
+                  <div class="proc-mode-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                      style="margin-bottom: 4px; filter: drop-shadow(0 2px 8px rgba(108, 92, 231, 0.4));">
+                      <defs>
+                        <linearGradient id="onnx-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#a29bfe" />
+                          <stop offset="100%" stop-color="#6c5ce7" />
+                        </linearGradient>
+                      </defs>
+                      <rect x="4" y="4" width="16" height="16" rx="3" stroke="url(#onnx-grad)" stroke-width="2" />
+                      <rect x="9" y="9" width="6" height="6" rx="1" fill="url(#onnx-grad)" />
+                      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" stroke="url(#onnx-grad)"
+                        stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                  </div>
+                  <div class="proc-mode-title">AI (ONNX)</div>
+                  <div class="proc-mode-sub">Deep · 2–4 min</div>
+                  <div class="proc-mode-desc">Best for anime, artwork, illustrations. Real-ESRGAN AI creates genuine new
+                    pixels.</div>
+                  <div class="proc-mode-badge proc-badge-ai">AI</div>
+                </label>
+
+                <!-- Option 3: Canvas + ONNX -->
+                <label class="proc-mode-card" id="proc-card-both">
+                  <input type="radio" name="proc-mode" value="both" id="proc-both" />
+                  <div class="proc-mode-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                      style="margin-bottom: 4px; filter: drop-shadow(0 2px 8px rgba(255, 117, 140, 0.4));">
+                      <defs>
+                        <linearGradient id="max-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#ff758c" />
+                          <stop offset="100%" stop-color="#ff7eb3" />
+                        </linearGradient>
+                      </defs>
+                      <path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9L12 2Z" fill="url(#max-grad)" />
+                      <circle cx="5" cy="5" r="1" fill="#ff7eb3" />
+                      <circle cx="19" cy="19" r="1" fill="#ff7eb3" />
+                    </svg>
+                  </div>
+                  <div class="proc-mode-title">Canvas + AI</div>
+                  <div class="proc-mode-sub">Maximum · 3–5 min</div>
+                  <div class="proc-mode-desc">AI upscales first, then Canvas sharpens on top. Best possible quality for
+                    any image.</div>
+                  <div class="proc-mode-badge proc-badge-max">MAX</div>
+                </label>
+
+              </div>
+              <p id="proc-mode-auto-note" style="font-size:0.75rem;color:var(--text-muted);margin:10px 0 0 0;">
+                💡 <strong>Auto:</strong> Real photos → Canvas. Anime/Art → AI. Select above to override.
+              </p>
+            </div>
+            <!-- ═══ END PROCESSING MODE ═══ -->
+
+            <!-- Output Format (Image) -->
+            <!-- Output Format (Image Only) -->
+            <div class="settings-section" id="format-section">
+              <h3 id="format-section-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: text-bottom;">
+                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                  <line x1="7" y1="2" x2="7" y2="22" />
+                  <line x1="17" y1="2" x2="17" y2="22" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <line x1="2" y1="7" x2="7" y2="7" />
+                  <line x1="2" y1="17" x2="7" y2="17" />
+                  <line x1="17" y1="17" x2="22" y2="17" />
+                  <line x1="17" y1="7" x2="22" y2="7" />
+                </svg>
+                Output Format
+              </h3>
+
+              <div class="format-selector" id="format-selector-image">
+                <label class="format-option">
+                  <input type="radio" name="image-format" value="png" checked />
+                  <div class="format-card">PNG <small>Lossless</small></div>
+                </label>
+                <label class="format-option">
+                  <input type="radio" name="image-format" value="jpg" />
+                  <div class="format-card">JPG <small>Compact</small></div>
+                </label>
+                <label class="format-option">
+                  <input type="radio" name="image-format" value="webp" />
+                  <div class="format-card">WebP <small>Modern</small></div>
+                </label>
+                <label class="format-option" id="gif-format-option" style="display:none;">
+                  <input type="radio" name="image-format" value="gif" id="gif-radio" />
+                  <div class="format-card">GIF <small>Animated</small></div>
+                </label>
+              </div>
+
+              <div class="jpeg-quality-row" id="jpeg-quality-row" style="display:none;">
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>Image Quality</span>
+                    <span id="jpeg-quality-val" class="slider-val">92%</span>
+                  </div>
+                  <input type="range" id="jpeg-quality" min="10" max="100" value="92" class="range-slider" />
+                </div>
+              </div>
+
+              <!-- Size Comparison Card (Critical for updateSizeEstimation) -->
+              <div class="size-comparison-card">
+                <div class="size-comparison-header">
+                  <h4>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="21 16 21 21 16 21" />
+                      <polyline points="3 8 3 3 8 3" />
+                      <polyline points="16 3 21 3 21 8" />
+                      <polyline points="8 21 3 21 3 16" />
+                    </svg>
+                    Size Comparison
+                  </h4>
+                  <span class="size-change-badge" id="size-change-badge">Calculating...</span>
+                </div>
+                <div class="size-comparison-grid">
+                  <div class="size-item orig">
+                    <span class="size-label">Original</span>
+                    <span id="size-original" class="size-val">—</span>
+                    <span id="size-original-res" class="size-res">—</span>
+                  </div>
+                  <div class="size-arrow">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </div>
+                  <div class="size-item dest">
+                    <span class="size-label">Est. Enhanced</span>
+                    <span id="size-output" class="size-val">—</span>
+                    <span id="size-output-res" class="size-res">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- End of step-configure -->
+
+    <!-- STEP 3: PROCESSING -->
+    <div id="step-processing" class="step">
+      <div class="processing-view">
+        <h2 id="processing-title" class="processing-title">Enhancing your image…</h2>
+        <p id="processing-status" class="processing-status">Upscaling to target resolution…</p>
+
+        <div class="processing-preview-container" id="processing-preview-container">
+          <div class="rec-badge">
+            <span class="rec-dot"></span> Live AI Processing
+          </div>
+          <div id="processing-canvas-wrapper" class="processing-canvas-wrapper">
+            <canvas id="processing-canvas"></canvas>
+          </div>
+        </div>
+
+        <div class="inline-progress-container">
+          <div class="progress-time time-start" id="time-start">Started: --:--</div>
+          <div class="linear-progress-wrapper clean-bar-wrapper">
+            <div class="linear-progress-track">
+              <div id="linear-progress-fill" class="linear-progress-fill"></div>
+            </div>
+            <div id="progress-percent" class="progress-percent-center">0%</div>
+          </div>
+          <div class="progress-time time-end" id="processing-eta">End: --:--</div>
+        </div>
+
+        <!-- Processing Controls: Pause & Cancel -->
+        <div class="processing-controls">
+          <button id="btn-process-pause" class="btn btn-process-control btn-process-pause">
+            <svg id="icon-pause-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <rect x="6" y="4" width="4" height="16" />
+              <rect x="14" y="4" width="4" height="16" />
+            </svg>
+            <span id="txt-process-pause">Pause</span>
+          </button>
+          <button id="btn-process-cancel" class="btn btn-process-control btn-process-cancel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            Cancel
+          </button>
+        </div>
+
+        <!-- ===== AI MODEL DOWNLOAD PROGRESS ===== -->
+        <div id="ai-download-progress" class="ai-download-progress" style="display: none;">
+          <div class="ai-download-text" id="ai-download-text">Downloading AI brain… 0%</div>
+          <div class="ai-download-bar">
+            <div class="ai-download-bar-fill" id="ai-download-bar-fill"></div>
+          </div>
+          <div class="ai-download-hint">This only happens once. After this it is saved on your device.</div>
+        </div>
+
+        <!-- ===== AI FRAME-BY-FRAME PROGRESS ===== -->
+        <div id="ai-frame-info" class="ai-frame-info" style="display: none;">
+          <div class="ai-res-comparison" id="ai-res-comparison">Original: 720p → Enhanced: 1440p 2K</div>
+          <div class="ai-frame-status" id="ai-frame-status">Processing your image…</div>
+          <div class="ai-tile-status" id="ai-tile-status"></div>
+          <div class="ai-eta" id="ai-eta"></div>
+        </div>
+
+        <!-- ===== AI LIVE PREVIEW ===== -->
+        <div id="ai-live-preview-wrap" class="ai-live-preview-wrap" style="display: none;">
+          <canvas id="ai-preview-canvas"></canvas>
+        </div>
+
+        <!-- Hidden elements for CSS/JS compatibility -->
+        <div id="frog-progress-text" style="display:none;"></div>
+        <div id="progress-percent-circular" style="display:none;"></div>
+        <svg style="display:none">
+          <circle id="progress-ring-fill"></circle>
+        </svg>
+      </div>
+    </div>
+
+    <!-- STEP 4: RESULT -->
+    <div id="step-result" class="step">
+      <div class="result-header">
+        <h2 class="section-title">Step <span class="gradient-text">Complete</span></h2>
+        <p class="section-sub">Your media has been successfully enhanced</p>
+      </div>
+
+      <div class="result-layout">
+        <!-- Left: Before/After Comparison -->
+        <div class="comparison-panel">
+          <div class="panel-header">
+            <h3>Before / After Comparison</h3>
+          </div>
+          <div class="comparison-container" id="comparison-container">
+            <div class="comparison-before" id="comparison-before">
+              <img id="compare-before-img" alt="Before" />
+              <span class="comparison-label-before">Before</span>
+            </div>
+            <div class="comparison-after" id="comparison-after">
+              <img id="compare-after-img" alt="After" />
+              <span class="comparison-label-after">After</span>
+            </div>
+            <div class="comparison-divider" id="comparison-divider">
+              <div class="divider-handle">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M11 5L6 12L11 19M13 5L18 12L13 19" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Details & Actions -->
+        <div class="result-actions-panel">
+          <div class="panel-header">
+            <h3>📊 Enhancement Results</h3>
+          </div>
+
+          <div class="results-stats-grid">
+            <div class="res-card orig">
+              <div class="res-card-label">Original</div>
+              <div class="res-stat-row">
+                <span class="lbl">Resolution</span>
+                <span id="result-orig-res" class="val">—</span>
+              </div>
+              <div class="res-stat-row">
+                <span class="lbl">File Size</span>
+                <span id="result-orig-size" class="val">—</span>
+              </div>
+              <div class="res-stat-row">
+                <span class="lbl">Format</span>
+                <span id="result-orig-format" class="val">—</span>
+              </div>
+            </div>
+
+            <div class="res-card enhanced">
+              <div class="res-card-label">Enhanced</div>
+              <div class="res-stat-row">
+                <span class="lbl">Resolution</span>
+                <span id="result-new-res" class="val">—</span>
+              </div>
+              <div class="res-stat-row">
+                <span class="lbl">File Size</span>
+                <span id="result-new-size" class="val">—</span>
+              </div>
+              <div class="res-stat-row">
+                <span class="lbl">Format</span>
+                <span id="result-new-format" class="val">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="applied-filters-box">
+            <div class="lbl-small">Filters Applied</div>
+            <div id="result-filters-list" class="filters-tag-cloud">
+            </div>
+          </div>
+
+          <div class="result-cta-group">
+            <button id="btn-download" class="btn btn-primary btn-lg btn-full btn-glow">
+              <span class="btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </span>
+              Download Enhanced Media
+            </button>
+            <button id="btn-restart" class="btn btn-ghost btn-lg btn-full btn-restart">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+              Enhance Another File
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== FLOATING ACTION BAR (visible in configure step) ===== -->
+    <div id="floating-action-bar" class="floating-action-bar">
+      <div class="fab-inner">
+        <button id="btn-toggle-shortcuts" class="btn btn-ghost btn-sm fab-toggle-btn" title="Show Shortcuts">
+          <span class="btn-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+          </span>
+        </button>
+        <div class="fab-shortcuts" id="fab-shortcuts"
+          style="display: none; padding-right: 1rem; border-right: 1px solid var(--border); margin-right: 0.5rem;">
+          <button class="fab-shortcut" id="fab-quality" title="Quality [Q]">
+            <span class="fab-shortcut-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </span>
+            <span class="fab-shortcut-label">Quality</span>
+          </button>
+          <button class="fab-shortcut" id="fab-filters" title="Filters [F]">
+            <span class="fab-shortcut-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+            </span>
+            <span class="fab-shortcut-label">Filters</span>
+          </button>
+          <button class="fab-shortcut" id="fab-tune" title="Fine-Tune [T]">
+            <span class="fab-shortcut-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
+              </svg>
+            </span>
+            <span class="fab-shortcut-label">Tune</span>
+          </button>
+          <button class="fab-shortcut" id="fab-format" title="Format [O]">
+            <span class="fab-shortcut-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path
+                  d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                </path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+            </span>
+            <span class="fab-shortcut-label">Format</span>
+          </button>
+        </div>
+        <button id="enhance-btn" type="button" class="btn btn-primary btn-lg fab-enhance-btn">
+          <span class="btn-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z" />
+              <path d="m14 7 3 3" />
+              <path d="M5 6v4" />
+              <path d="M19 14v4" />
+              <path d="M10 2v2" />
+              <path d="M7 8H3" />
+              <path d="M21 16h-4" />
+              <path d="M11 3H9" />
+            </svg>
+          </span>
+          Enhance Now
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== ABOUT SECTION ===== -->
+    <section id="about-section" class="about-section">
+      <h2 class="section-title">About <span class="gradient-text">Zenpick</span></h2>
+      <div class="about-content">
+        <p>Zenpick is a professional-grade, free AI image enhancer, editor, and upscaler designed to bring your
+          low-resolution photos to life. Using advanced machine learning, we help users upscale images to 8K, sharpen
+          blurry photos, restore old pictures, and edit details directly in the browser—no software installation
+          required.</p>
+        <p>Our mission is to provide high-quality AI image enhancement and editing that is fast, private, and 100% free
+          for everyone. All processing is executed locally on your device to ensure maximum privacy.</p>
+      </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer id="footer">
+      <div class="footer-content">
+        <img src="zenpick-logo.png" alt="Zenpick" class="footer-logo-img" />
+        <p>Zenpick — 100% Free AI Image Enhancer, Editor &amp; Upscaler</p>
+        <p class="footer-note">All processing is done locally in your browser. No files are uploaded to any server. No
+          sign-in required. No watermark on output.</p>
+        <div class="footer-seo-keywords">
+          <p>image enhance website · AI image editor · free image editor · image upscaling · AI image enhancer · free
+            image upscaler · upscale image to 8K free · upscale image to 4K free · sharpen blurry photos · restore old
+            pictures · browser-based · Zenpick</p>
+        </div>
+        <div class="footer-help">
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLScf7r2wb_Qu_5dg_kuncd3BXcTVhUefNP0kiIZK56KjSbeUtQ/viewform?usp=sharing&ouid=114795145231453088126"
+            target="_blank" rel="noopener noreferrer" class="btn btn-help-feedback">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Help &amp; Feedback
+          </a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ===== FULLSCREEN OVERLAY (body-level for proper z-index and click handling) ===== -->
+    <div id="fullscreen-overlay" class="fullscreen-overlay">
+      <div class="fullscreen-backdrop" id="fullscreen-backdrop"></div>
+      <div class="fullscreen-toolbar">
+        <span class="fullscreen-title">Zenpick — Preview Fullscreen</span>
+        <button id="btn-exit-fullscreen" class="btn btn-sm btn-ghost fullscreen-close-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+          Close
+        </button>
+      </div>
+      <div class="fullscreen-media-container" id="fullscreen-media-container">
+        <img id="fullscreen-image" alt="Fullscreen Preview" />
+      </div>
+    </div>
+
+    <svg style="display: none;" width="0" height="0">
+      <filter id="dynamic-curve-filter" color-interpolation-filters="sRGB">
+        <feComponentTransfer id="curve-transfer">
+          <feFuncR type="table" tableValues="0 1"></feFuncR>
+          <feFuncG type="table" tableValues="0 1"></feFuncG>
+          <feFuncB type="table" tableValues="0 1"></feFuncB>
+        </feComponentTransfer>
+      </filter>
+    </svg>
+
+    <script>
+      // Dynamic cache-buster: inject main.js with a unique timestamp
+      // to guarantee the browser never executes stale cached files
+      (function() {
+        var s = document.createElement('script');
+        s.src = 'main.js?v=' + Date.now();
+        s.defer = true;
+        document.body.appendChild(s);
+      })();
+    </script>
+
+    <div id=" debug-errors"
+      style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a0000;color:#ff4444;padding:12px 16px;font-family:monospace;font-size:13px;z-index:99999;border-top:2px solid #ff0000;max-height:150px;overflow-y:auto;">
+    </div >
+
+          <script>
+            (function () {
+              // Show errors visually on the page
+              function showError(msg) {
+                var box = document.getElementById('debug-errors');
+                if (box) { box.style.display = 'block'; box.innerHTML += '<div>❌ ' + msg + '</div>'; }
+                console.error('[FAILSAFE] ' + msg);
+              }
+
+        // Catch ALL unhandled errors (but skip WASM/FFmpeg errors handled by Hardware Guard)
+        window.addEventListener('error', function (e) {
+          var msg = (e.message || '').toLowerCase();
+            // Skip WASM abort/OOM errors — these are caught by the Hardware Guard fallback system
+            if (msg.includes('abort') || msg.includes('oom') || msg.includes('runtimeerror') || msg.includes('memory')) {
+              console.warn('[FAILSAFE] Suppressed WASM error (handled by Hardware Guard):', e.message);
+            return;
+          }
+            showError('JS Error: ' + e.message + ' at ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+        });
+
+            // Wait for DOM ready
+            window.addEventListener('DOMContentLoaded', function () {
+          var btn = document.getElementById('enhance-btn') || document.getElementById('btn-process');
+            console.log('[FAILSAFE] Checking for button...');
+            if (!btn) {
+              showError('Enhance button NOT FOUND in DOM! Checked #enhance-btn and #btn-process');
+            return;
+          }
+
+            console.log('[FAILSAFE] Enhance button found. Using ID: ' + btn.id);
+
+            btn.addEventListener('click', function (e) {
+              console.log('[FAILSAFE] CLICK DETECTED on: ' + btn.id);
+
+            // Visual indicator that click was at least heard by HTML
+            var origBackground = btn.style.background;
+            btn.style.background = '#00ff00';
+            setTimeout(function () {btn.style.background = origBackground; }, 200);
+          });
+        });
+      })();
+      </script>
+</body>
+
+</html>

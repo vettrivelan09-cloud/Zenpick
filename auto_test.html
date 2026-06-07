@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Auto Test</title>
+</head>
+<body>
+  <div id="log" style="font-family: monospace; white-space: pre-wrap; margin-bottom: 20px;"></div>
+  
+  <script>
+    window.onerror = function (message, source, lineno, colno, error) {
+      log('GLOBAL ERROR: ' + message + ' at ' + lineno + ':' + colno + ' - ' + (error ? error.stack : ''));
+      return false;
+    };
+    
+    function log(msg) {
+      console.log(msg);
+      const d = document.createElement('div');
+      d.textContent = msg;
+      document.getElementById('log').appendChild(d);
+    }
+  </script>
+  
+  <!-- iframe to load the app -->
+  <iframe id="app-frame" src="/" style="width: 100vw; height: 80vh; border: 2px solid #ccc;"></iframe>
+
+  <script>
+    const frame = document.getElementById('app-frame');
+    
+    frame.onload = async () => {
+      log('App loaded in iframe. Waiting for splash to finish...');
+      const appWind = frame.contentWindow;
+      const appDoc = frame.contentDocument;
+      
+      // Override console.log/error inside iframe to capture it here
+      const origLog = appWind.console.log;
+      const origErr = appWind.console.error;
+      const origWarn = appWind.console.warn;
+      
+      appWind.console.log = function(...args) { log('[APP LOG] ' + args.join(' ')); origLog.apply(this, args); };
+      appWind.console.error = function(...args) { log('[APP ERR] ' + args.join(' ')); origErr.apply(this, args); };
+      appWind.console.warn = function(...args) { log('[APP WARN] ' + args.join(' ')); origWarn.apply(this, args); };
+      
+      await new Promise(r => setTimeout(r, 5000));
+      
+      log('Creating synthetic test video...');
+      
+      try {
+        const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+        const ctx = c.getContext('2d');
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const dest = audioCtx.createMediaStreamDestination();
+        const osc = audioCtx.createOscillator();
+        osc.connect(dest);
+        osc.start();
+        
+        const vStream = c.captureStream(24);
+        const combinedTestStream = new MediaStream([...vStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        
+        const recorder = new MediaRecorder(combinedTestStream, { mimeType: 'video/webm' });
+        const chunks = [];
+        recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+        
+        const blobP = new Promise(resolve => {
+          recorder.onstop = () => { resolve(new Blob(chunks, { type: 'video/webm' })); };
+        });
+        
+        recorder.start(100);
+        let frameCt = 0;
+        const interval = setInterval(() => { 
+          frameCt++;
+          ctx.fillStyle = `hsl(${(frameCt*5)%360}, 100%, 50%)`; 
+          ctx.fillRect(0,0,320,240); 
+        }, 1000/24);
+        
+        setTimeout(() => { clearInterval(interval); osc.stop(); recorder.stop(); audioCtx.close(); }, 2000);
+        
+        const blob = await blobP;
+        const file = new File([blob], "test_video.webm", { type: "video/webm" });
+        log('Test video created: ' + file.size + ' bytes');
+        
+        log('Triggering file input change manually...');
+        const fileInput = appDoc.getElementById('file-input');
+        
+        // We can't directly trigger change event with files easily due to security,
+        // unless we use DataTransfer which is sometimes blocked in frames, but let's try
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        log('Waiting 2 seconds for configure screen...');
+        await new Promise(r => setTimeout(r, 2000));
+        
+        const enhanceBtn = appDoc.getElementById('enhance-btn') || appDoc.getElementById('btn-process');
+        log('Clicking enhance button: ' + (enhanceBtn ? enhanceBtn.id : 'NOT FOUND'));
+        
+        if (enhanceBtn) {
+          enhanceBtn.click();
+          // Intercept combined stream for verification
+          const oldMediaRecorder = appWind.MediaRecorder;
+          appWind.MediaRecorder = function(stream, options) {
+              log("MediaRecorder started with " + stream.getVideoTracks().length + " video and " + stream.getAudioTracks().length + " audio tracks.");
+              return new oldMediaRecorder(stream, options);
+          };
+
+          setTimeout(function() {
+              const result = frame.contentDocument.getElementById('step-result');
+              if (result && result.classList.contains('active')) {
+                  log("SUCCESS: Result screen reached.");
+                  const afterImg = frame.contentDocument.getElementById('compare-after-img');
+                  if (afterImg && afterImg.src) log("SUCCESS: thumbnail captured: " + afterImg.src.substring(0, 40) + "...");
+              }
+              log("Test finished.");
+          }, 10000);
+        }
+
+      } catch (e) {
+        log('ERROR IN TEST RUNNER: ' + e.message);
+      }
+    };
+  </script>
+</body>
+</html>
