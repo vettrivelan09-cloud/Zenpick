@@ -229,6 +229,43 @@
       enhBtn.disabled = false;
       enhBtn.classList.remove('btn-disabled');
     }
+
+    // ── Mobile Tier 3: Disable ONNX + Canvas+AI cards (too heavy for mobile WASM) ──
+    if (hwInfo.tier === 3) {
+      const cardOnnx = document.getElementById('proc-card-onnx');
+      const cardBoth = document.getElementById('proc-card-both');
+      const procCanvas = document.getElementById('proc-canvas');
+      const cardCanvas = document.getElementById('proc-card-canvas');
+      if (cardOnnx) {
+        cardOnnx.style.opacity = '0.35';
+        cardOnnx.style.pointerEvents = 'none';
+        // Add a "Not supported on mobile" tooltip
+        cardOnnx.title = 'AI (ONNX) requires more RAM than your device has. Use Canvas mode.';
+        // Inject a small warning label if not already there
+        if (!cardOnnx.querySelector('.mobile-unsupported-label')) {
+          const lbl = document.createElement('div');
+          lbl.className = 'mobile-unsupported-label';
+          lbl.style.cssText = 'font-size:0.6rem;color:#f87171;margin-top:4px;font-weight:700;';
+          lbl.textContent = '⚠ Not supported on mobile';
+          cardOnnx.appendChild(lbl);
+        }
+      }
+      if (cardBoth) {
+        cardBoth.style.opacity = '0.35';
+        cardBoth.style.pointerEvents = 'none';
+        cardBoth.title = 'Canvas + AI requires too much RAM for mobile. Use Canvas mode.';
+        if (!cardBoth.querySelector('.mobile-unsupported-label')) {
+          const lbl = document.createElement('div');
+          lbl.className = 'mobile-unsupported-label';
+          lbl.style.cssText = 'font-size:0.6rem;color:#f87171;margin-top:4px;font-weight:700;';
+          lbl.textContent = '⚠ Not supported on mobile';
+          cardBoth.appendChild(lbl);
+        }
+      }
+      // Force Canvas mode selected
+      if (procCanvas) procCanvas.checked = true;
+      if (cardCanvas) cardCanvas.classList.add('selected');
+    }
   }
 
   // ===== STATE ===== //
@@ -2321,7 +2358,7 @@
           const url = parts[i];
           console.log(`[ONNX] Fetching split part ${i + 1}/${parts.length}:`, url);
           if (dlText) dlText.textContent = `Downloading AI brain… (part ${i + 1}/${parts.length})`;
-          
+
           const response = await fetch(url);
           if (!response.ok) {
             throw new Error(`HTTP ${response.status} ${response.statusText} on ${url}`);
