@@ -150,13 +150,15 @@
     // 7. Tier classification
     let tier, label, description, accentColor;
     // iOS always lightweight — no SharedArrayBuffer for FFmpeg.wasm
-    // Mobile with < 4GB RAM → lightweight (crash risk)
-    // Mobile with 4-5GB RAM → balanced mode (can run full ONNX, slower)
-    // Mobile with 6GB+ RAM (e.g. MediaTek G99, Dimensity) → full pipeline like desktop
-    if (isIOS || ram < 4) {
+    // ALL mobile devices (Android + iOS): force tier 3 (Canvas-only).
+    // ONNX Runtime Web loads a ~67MB model into WASM on a single browser tab.
+    // Even high-RAM Android phones (6-8GB) crash or produce corrupted output
+    // because mobile browsers cap WASM memory and lack GPU compute access.
+    // Canvas WebGL is fast, stable, and produces good results on mobile.
+    if (isIOS || isMobile || ram < 4) {
       tier = 3;
       label = '📱 Mobile Optimization Active';
-      description = 'To prevent your device from crashing, we are using "Lightweight Rendering". This ensures a 0% crash rate and saves your battery.';
+      description = 'Using fast Canvas mode for your device. AI (ONNX) mode requires a desktop browser and is not available on mobile.';
       accentColor = 'tier3';
     } else if (ram >= 8 && cores >= 4 && !isSafari) {
       tier = 1;
@@ -164,12 +166,9 @@
       description = 'System optimized for Full FFmpeg AI Rendering. Quality: Ultra High.';
       accentColor = 'tier1';
     } else {
-      // Covers: 4-7GB RAM desktop, 6GB+ RAM Android phones (MediaTek, Snapdragon)
       tier = 2;
-      label = isMobile ? '📱 Mobile High-Performance Mode' : '⚖️ Balanced Mode Active';
-      description = isMobile
-        ? 'Your phone has enough RAM to run AI enhancement. Processing will be slower than desktop but will produce full quality output. Keep your screen on and browser tab open.'
-        : 'Your device is ready. For a smooth finish, please do not close this tab during processing.';
+      label = '⚖️ Balanced Mode Active';
+      description = 'Your device is ready. For a smooth finish, please do not close this tab during processing.';
       accentColor = 'tier2';
     }
 
@@ -1683,8 +1682,8 @@
         const ov = document.getElementById('adv-preview-overlay'); if (ov) ov.style.display = 'none';
         return;
       }
-      const pw = previewImage.offsetWidth || 400;
-      const ph = previewImage.offsetHeight || 300;
+      const pw = Math.min(previewImage.naturalWidth || previewImage.offsetWidth || 400, 800);
+      const ph = Math.min(previewImage.naturalHeight || previewImage.offsetHeight || 600, 800);
       const offC = document.createElement('canvas');
       offC.width = pw; offC.height = ph;
       const offCtx = offC.getContext('2d', { willReadFrequently: true });
@@ -1840,6 +1839,17 @@
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
   }
+  // ── Brave browser detection: show gallery notice on mobile ──
+  (async () => {
+    try {
+      const isBrave = (navigator.brave && await navigator.brave.isBrave()) || false;
+      const isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isBrave && isMobileUA) {
+        const notice = document.getElementById('brave-gallery-notice');
+        if (notice) notice.style.display = 'block';
+      }
+    } catch (e) { /* brave check failed silently */ }
+  })();
   // BUG 2 FIX: Decouple scroll from file input to prevent page jumping back to top
   let isFileDialogOpen = false;
   if (heroUploadBtn && fileInput) {
