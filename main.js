@@ -1200,7 +1200,7 @@
         // Highlight protection: pixels above 215 get reduced boost
         const brightProtect = lum[i] > 215 ? Math.max(0, (255 - lum[i]) / 40) : 1.0;
         const delta = edge * microStr * brightProtect;
-        data[i * 4]     = clamp(data[i * 4]     + delta);
+        data[i * 4] = clamp(data[i * 4] + delta);
         data[i * 4 + 1] = clamp(data[i * 4 + 1] + delta);
         data[i * 4 + 2] = clamp(data[i * 4 + 2] + delta);
       }
@@ -2177,10 +2177,10 @@
 
   // Returns the correct tile size for the current backend
   function getActiveTileSize() {
-    return (aiState.backend === 'webgpu') ? AI_TILE_SIZE_WEBGPU : AI_TILE_SIZE;
+    return aiState.modelTileSize || 64;
   }
   function getActiveTileOverlap() {
-    return (aiState.backend === 'webgpu') ? 8 : 64;
+    return aiState.modelTileOverlap || 8;
   }
 
   const aiState = {
@@ -2194,7 +2194,9 @@
     processing: false,
     frameSkip: 1,        // PERF FIX 3: 1 = every frame, 2 = every 2nd frame (fast mode)
     cpuMode: false,      // True if using WASM backend (slower, needs optimizations)
-    scaleFactor: 4       // PERF FIX 1: Effective scale factor (2 for 1080p CPU mode, 4 for 480p/720p)
+    scaleFactor: 4,      // PERF FIX 1: Effective scale factor (2 for 1080p CPU mode, 4 for 480p/720p)
+    modelTileSize: 64,   // Dynamically set based on model metadata (default 64)
+    modelTileOverlap: 8  // Dynamically set based on model metadata (default 8)
   };
 
   const AI_RES_CONFIG = {
@@ -2300,6 +2302,26 @@
     }
   }
 
+  function detectSessionTileSize(session) {
+    let size = 64; // Default fallback
+    try {
+      const meta = session.inputMetadata || session.inputs;
+      if (meta) {
+        const firstInputName = session.inputNames[0] || 'input';
+        const inputInfo = meta[firstInputName] || (Array.isArray(meta) ? meta[0] : null);
+        if (inputInfo && inputInfo.dims) {
+          const h = inputInfo.dims[2];
+          if (typeof h === 'number' && h > 0) {
+            size = h;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[ONNX] Failed to inspect metadata:', e);
+    }
+    return size;
+  }
+
   // --- Section 3: ONNX Model Loader ---
   async function loadONNXModel() {
     if (aiState.session) return aiState.session;
@@ -2385,7 +2407,7 @@
           const url = parts[i];
           console.log(`[ONNX] Fetching split part ${i + 1}/${parts.length}:`, url);
           if (dlText) dlText.textContent = `Downloading AI brain… (part ${i + 1}/${parts.length})`;
-          
+
           const response = await fetch(url);
           if (!response.ok) {
             throw new Error(`HTTP ${response.status} ${response.statusText} on ${url}`);
@@ -2495,7 +2517,8 @@
         // Run a real 64×64 tile inference to flush out these failures BEFORE processing.
         if (dlText) dlText.textContent = 'Testing GPU compatibility…';
         try {
-          const STRESS_TILE = 64;
+          const STRESS_TILE = detectSessionTileSize(aiState.session);
+          console.log('[ONNX] Running GPU stress test with tile size:', STRESS_TILE);
           const stressData = new Float32Array(1 * 3 * STRESS_TILE * STRESS_TILE);
           // Fill with non-zero data — zero tiles may be optimized away by the GPU driver
           for (let si = 0; si < stressData.length; si++) stressData[si] = Math.random() * 0.5 + 0.25;
@@ -2553,6 +2576,41 @@
       } catch (wasmErr) {
         throw new Error('Could not load AI model. Error: ' + wasmErr.message);
       }
+    }
+
+    // ── DYNAMIC TILE SIZE DETECTION ──
+    try {
+      const meta = aiState.session.inputMetadata || aiState.session.inputs;
+      if (meta) {
+        const firstInputName = aiState.session.inputNames[0] || 'input';
+        const inputInfo = meta[firstInputName] || (Array.isArray(meta) ? meta[0] : null);
+        if (inputInfo && inputInfo.dims) {
+          const h = inputInfo.dims[2];
+          const w = inputInfo.dims[3];
+          // If shape is static (e.g. 64 or 128), enforce it
+          if (typeof h === 'number' && h > 0) {
+            aiState.modelTileSize = h;
+            // Overlap: 8 for 64, or scale proportionally (12.5% of tile size)
+            aiState.modelTileOverlap = Math.max(4, Math.round(h * 0.125));
+            console.log('[ONNX] Detected static model tile size:', h, 'overlap:', aiState.modelTileOverlap);
+          } else {
+            // Dynamic shape (e.g. -1 or undefined) — we can choose optimal tile size based on backend
+            if (aiState.backend === 'webgpu') {
+              aiState.modelTileSize = 64;
+              aiState.modelTileOverlap = 8;
+            } else {
+              // WASM/WebGL: use larger tiles to reduce overhead
+              aiState.modelTileSize = 128;
+              aiState.modelTileOverlap = 16;
+            }
+            console.log('[ONNX] Model has dynamic tile size, using optimized backend default:', aiState.modelTileSize);
+          }
+        }
+      }
+    } catch (metaErr) {
+      console.warn('[ONNX] Could not query model metadata, using safe defaults:', metaErr);
+      aiState.modelTileSize = 64;
+      aiState.modelTileOverlap = 8;
     }
 
     console.log('[ONNX] Session created, backend:', aiState.backend, '| inputNames:', aiState.session.inputNames, '| outputNames:', aiState.session.outputNames);
@@ -3546,9 +3604,14 @@
           const inputTensor = imageDataToONNXTensor(tileImageData, activeTileSize, activeTileSize);
           try {
             // Session integrity check — WakeGuard may have nulled aiState.session mid-run.
-            // If so, abort cleanly rather than producing a corrupt result or a confusing error.
+            // Distinguish between user cancellation (cancelRequested=true) and WakeGuard
+            // interference / GPU death (session nulled but user didn't cancel).
             if (aiState.session !== capturedSession) {
-              throw new Error('Processing cancelled by user.');
+              if (aiState.cancelRequested) {
+                throw new Error('Processing cancelled by user.');
+              }
+              // Session was invalidated by WakeGuard or GPU death — trigger auto-recovery
+              throw new Error('GPU_DEVICE_LOST: Session invalidated during processing');
             }
             const feeds = {};
             feeds[inputName] = inputTensor;
@@ -4444,6 +4507,7 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
   // --- Section 10: runAIProcessing — routes image vs video ---
   async function runAIProcessing() {
     if (aiState.processing || !state.file) return;
+    aiState.processing = true; // Guard WakeGuard from interfering during image ONNX processing
     const tier = aiState.detectedTier;
     const cfg = AI_RES_CONFIG[tier];
 
