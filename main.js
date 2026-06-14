@@ -3619,7 +3619,14 @@
             }
             const feeds = {};
             feeds[inputName] = inputTensor;
-            const results = await capturedSession.run(feeds);
+
+            // ── GPU HANG PROTECTION ──
+            // Set a timeout of 15 seconds per tile. If it hangs (e.g. due to WebGPU device loss),
+            // we reject and fall back safely instead of freezing the webpage.
+            const results = await Promise.race([
+              capturedSession.run(feeds),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('GPU tile timeout')), 15000))
+            ]);
             const outputTensor = Object.values(results)[0];
             // Log tensor shape on first tile to debug output
             if (tileIdx === 1) {
@@ -3637,13 +3644,13 @@
             if (e.message && e.message.includes('cancelled by user')) throw e;
 
             // ── GPU DEVICE-LOST DETECTION ──
-            // DXGI_ERROR_DEVICE_HUNG / AbortError / 'device is lost' = GPU is dead.
+            // DXGI_ERROR_DEVICE_HUNG / AbortError / 'device is lost' / timeout = GPU is dead.
             // Don't silently bicubic-fallback every tile — that produces a non-AI result.
             // Instead, throw a recoverable error so the caller can retry with a safer backend.
             const errMsg = (e.message || '').toLowerCase();
             const isDeviceLost = errMsg.includes('device') || errMsg.includes('lost') ||
               errMsg.includes('abort') || errMsg.includes('hung') || errMsg.includes('removed') ||
-              errMsg.includes('mapasync') || (e.name && e.name === 'AbortError');
+              errMsg.includes('mapasync') || errMsg.includes('timeout') || (e.name && e.name === 'AbortError');
 
             consecutiveFailures++;
             if (isDeviceLost || consecutiveFailures >= 3) {
