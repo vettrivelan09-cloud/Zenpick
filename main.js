@@ -2477,8 +2477,8 @@
     // Old code tried WASM first, meaning GPU was never used even when available.
     const hasWebGPU = !!(navigator.gpu);
 
-    // Try WebGPU first (Chrome 113+)
-    if (hasWebGPU) {
+    // Try WebGPU first (Chrome 113+) — skip if it already crashed this session
+    if (hasWebGPU && !aiState._webgpuFailed) {
       try {
         aiState.backend = 'webgpu';
         if (dlText) dlText.textContent = 'Loading AI model (WebGPU — GPU accelerated)…';
@@ -2487,7 +2487,35 @@
           executionProviders: ['webgpu'],
           graphOptimizationLevel: 'all'
         });
-        console.log('[ONNX] ✓ WebGPU session created — fastest mode!');
+        console.log('[ONNX] ✓ WebGPU session created — running GPU stress test…');
+
+        // ── GPU STRESS TEST ──
+        // Some GPUs (older Intel HD, weak mobile GPUs) pass session creation but crash
+        // on actual inference with DXGI_ERROR_DEVICE_HUNG / AbortError / device lost.
+        // Run a real 64×64 tile inference to flush out these failures BEFORE processing.
+        if (dlText) dlText.textContent = 'Testing GPU compatibility…';
+        try {
+          const STRESS_TILE = 64;
+          const stressData = new Float32Array(1 * 3 * STRESS_TILE * STRESS_TILE);
+          // Fill with non-zero data — zero tiles may be optimized away by the GPU driver
+          for (let si = 0; si < stressData.length; si++) stressData[si] = Math.random() * 0.5 + 0.25;
+          const stressTensor = new ort.Tensor('float32', stressData, [1, 3, STRESS_TILE, STRESS_TILE]);
+          const stressFeeds = {};
+          stressFeeds[aiState.session.inputNames[0] || 'input'] = stressTensor;
+          // Race against a 10s timeout — if the GPU hangs, we don't wait forever
+          await Promise.race([
+            aiState.session.run(stressFeeds),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('GPU stress test timeout')), 10000))
+          ]);
+          console.log('[ONNX] ✓ GPU stress test passed — WebGPU is stable');
+        } catch (stressErr) {
+          console.error('[ONNX] ✗ GPU stress test FAILED:', stressErr.message,
+            '— GPU cannot handle WebGPU workloads. Falling back to safer backend.');
+          // Mark WebGPU as failed so we never retry it this session
+          aiState._webgpuFailed = true;
+          try { aiState.session.release(); } catch (releaseErr) { /* session may already be dead */ }
+          aiState.session = null;
+        }
       } catch (e) {
         console.warn('[ONNX] WebGPU failed:', e.message);
         aiState.session = null;
@@ -3184,7 +3212,50 @@
     console.log('[ONNX Image] Pre-ONNX avg luminance:', preOnnxAvgLuma.toFixed(2));
 
     // Run the same tile-based ONNX engine used for video frames
-    await processFrameWithONNX(onnxSourceCanvas, outputCanvas);
+    // ── GPU DEVICE-LOST AUTO-RECOVERY ──
+    // If the GPU dies mid-processing (DXGI_ERROR_DEVICE_HUNG), processFrameWithONNX
+    // throws 'GPU_DEVICE_LOST'. We catch it, recreate the session with a safer backend
+    // (WebGL → WASM), and retry automatically — the user never needs to manually reload.
+    let onnxRetries = 0;
+    const MAX_ONNX_RETRIES = 2;
+    while (true) {
+      try {
+        await processFrameWithONNX(onnxSourceCanvas, outputCanvas);
+        break; // Success — exit retry loop
+      } catch (onnxErr) {
+        // User cancellation — propagate immediately, no retry
+        if (onnxErr.message && onnxErr.message.includes('cancelled by user')) throw onnxErr;
+
+        // GPU device lost — retry with fallback backend
+        if (onnxErr.message && onnxErr.message.includes('GPU_DEVICE_LOST') && onnxRetries < MAX_ONNX_RETRIES) {
+          onnxRetries++;
+          console.warn('[ONNX] GPU device lost — attempting recovery (retry', onnxRetries + '/' + MAX_ONNX_RETRIES + ')…');
+          if (statusEl) statusEl.textContent = 'GPU crashed — switching to safe mode…';
+          if (setProgressFn) setProgressFn(10);
+
+          // Destroy dead session and force reload with fallback backend
+          aiState.session = null;
+          aiState._webgpuFailed = true; // Prevent WebGPU from being tried again
+          await loadONNXModel(); // Will skip WebGPU, try WebGL → WASM
+
+          if (!aiState.session) throw new Error('Could not recover — all backends failed.');
+          console.log('[ONNX] ✓ Recovered with backend:', aiState.backend);
+          if (statusEl) statusEl.textContent = 'Recovered! Reprocessing with ' + aiState.backend + '…';
+
+          // Reset output canvas for fresh processing
+          outputCanvas.width = onnxSourceCanvas.width * AI_SCALE;
+          outputCanvas.height = onnxSourceCanvas.height * AI_SCALE;
+          const recoverCtx = outputCanvas.getContext('2d', { willReadFrequently: true });
+          recoverCtx.imageSmoothingEnabled = true;
+          recoverCtx.imageSmoothingQuality = 'high';
+          recoverCtx.drawImage(onnxSourceCanvas, 0, 0, outputCanvas.width, outputCanvas.height);
+          continue; // Retry with new backend
+        }
+
+        // Non-recoverable error — propagate up
+        throw onnxErr;
+      }
+    }
     aiState.onTileComplete = null; // clean up
     console.log('[ONNX Image] processFrameWithONNX done. Output size:', outputCanvas.width, 'x', outputCanvas.height);
     if (setProgressFn) setProgressFn(88);
@@ -3445,6 +3516,7 @@
     const inputName = capturedSession.inputNames[0] || 'input';
     let tileIdx = 0;
     let skippedTiles = 0;
+    let consecutiveFailures = 0; // GPU device-lost detection
 
     for (let ty = 0; ty < tilesY; ty++) {
       for (let tx = 0; tx < tilesX; tx++) {
@@ -3492,10 +3564,31 @@
             const tDims = outputTensor.dims; // [1, 3, H, W]
             const tH = tDims[2], tW = tDims[3];
             outImageData = onnxTensorToImageData(outputTensor.data, tW, tH);
+            consecutiveFailures = 0; // Reset — this tile succeeded
           } catch (e) {
             // If session was replaced or user cancelled — propagate up immediately
             if (e.message && e.message.includes('cancelled by user')) throw e;
-            // Fallback: bicubic interpolation for this tile only
+
+            // ── GPU DEVICE-LOST DETECTION ──
+            // DXGI_ERROR_DEVICE_HUNG / AbortError / 'device is lost' = GPU is dead.
+            // Don't silently bicubic-fallback every tile — that produces a non-AI result.
+            // Instead, throw a recoverable error so the caller can retry with a safer backend.
+            const errMsg = (e.message || '').toLowerCase();
+            const isDeviceLost = errMsg.includes('device') || errMsg.includes('lost') ||
+              errMsg.includes('abort') || errMsg.includes('hung') || errMsg.includes('removed') ||
+              errMsg.includes('mapasync') || (e.name && e.name === 'AbortError');
+
+            consecutiveFailures++;
+            if (isDeviceLost || consecutiveFailures >= 3) {
+              console.error('[ONNX] GPU device lost detected after', consecutiveFailures,
+                'consecutive failures. Error:', e.message);
+              // Kill the dead session
+              aiState.session = null;
+              aiState._webgpuFailed = true;
+              throw new Error('GPU_DEVICE_LOST: ' + e.message);
+            }
+
+            // Single tile failure (not device-lost) — bicubic fallback for this tile only
             console.warn('[ONNX] Tile ' + tileIdx + ' failed, bicubic fallback:', e.message);
             const fallbackCanvas = document.createElement('canvas');
             fallbackCanvas.width = outTileSize;
@@ -4609,17 +4702,34 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       ]);
       console.log('[WakeGuard] ✓ ONNX session is healthy after wake');
     } catch (e) {
-      console.error('[WakeGuard] ✗ ONNX session died during sleep:', e.message);
-      // Null out the dead session so loadONNXModel() will create a fresh one
-      aiState.session = null;
-      videoAI.model = null;
-      // Only show the toast on configure screen — on result screen it is confusing noise
-      if (state.currentStep === 'configure') {
-        var wakeToast = document.createElement('div');
-        wakeToast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10001;background:rgba(255,71,87,0.15);border:1px solid rgba(255,71,87,0.4);color:#ff6b6b;padding:14px 28px;border-radius:12px;font-family:Inter,sans-serif;font-size:0.88rem;font-weight:600;backdrop-filter:blur(10px);max-width:520px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
-        wakeToast.textContent = 'AI engine reconnecting… Click Enhance Now to restart.';
-        document.body.appendChild(wakeToast);
-        setTimeout(function () { wakeToast.style.transition = 'opacity 0.5s'; wakeToast.style.opacity = '0'; setTimeout(function () { wakeToast.remove(); }, 600); }, 8000);
+      const errMsg = e.message || '';
+      // 'Session already started' = session is alive but busy — NOT a failure.
+      // This happens if we wake while a session.run() is still completing.
+      // Do NOT kill the session — it's perfectly healthy.
+      if (errMsg.includes('already started') || errMsg.includes('already running')) {
+        console.log('[WakeGuard] Session is busy (not dead) — skipping cleanup');
+      } else {
+        console.error('[WakeGuard] ✗ ONNX session died during sleep:', errMsg);
+        // Mark WebGPU as failed if this was a GPU device death
+        const isGpuDeath = errMsg.toLowerCase().includes('device') ||
+          errMsg.toLowerCase().includes('lost') || errMsg.toLowerCase().includes('abort') ||
+          errMsg.toLowerCase().includes('hung');
+        if (isGpuDeath && aiState.backend === 'webgpu') {
+          aiState._webgpuFailed = true;
+        }
+        // Null out the dead session so loadONNXModel() will create a fresh one
+        aiState.session = null;
+        videoAI.model = null;
+        // Only show the toast on configure screen — on result screen it is confusing noise
+        if (state.currentStep === 'configure') {
+          var wakeToast = document.createElement('div');
+          wakeToast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10001;background:rgba(255,71,87,0.15);border:1px solid rgba(255,71,87,0.4);color:#ff6b6b;padding:14px 28px;border-radius:12px;font-family:Inter,sans-serif;font-size:0.88rem;font-weight:600;backdrop-filter:blur(10px);max-width:520px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+          wakeToast.textContent = isGpuDeath
+            ? 'GPU disconnected — will use safe mode next time. Click Enhance Now to restart.'
+            : 'AI engine reconnecting… Click Enhance Now to restart.';
+          document.body.appendChild(wakeToast);
+          setTimeout(function () { wakeToast.style.transition = 'opacity 0.5s'; wakeToast.style.opacity = '0'; setTimeout(function () { wakeToast.remove(); }, 600); }, 8000);
+        }
       }
     } finally {
       aiState._wakeGuardRunning = false;
