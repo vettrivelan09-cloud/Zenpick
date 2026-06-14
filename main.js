@@ -2196,7 +2196,8 @@
     cpuMode: false,      // True if using WASM backend (slower, needs optimizations)
     scaleFactor: 4,      // PERF FIX 1: Effective scale factor (2 for 1080p CPU mode, 4 for 480p/720p)
     modelTileSize: 64,   // Dynamically set based on model metadata (default 64)
-    modelTileOverlap: 8  // Dynamically set based on model metadata (default 8)
+    modelTileOverlap: 8, // Dynamically set based on model metadata (default 8)
+    gpuDeviceLostTriggered: false
   };
 
   const AI_RES_CONFIG = {
@@ -2531,6 +2532,8 @@
             new Promise((_, rej) => setTimeout(() => rej(new Error('GPU stress test timeout')), 10000))
           ]);
           console.log('[ONNX] ✓ GPU stress test passed — WebGPU is stable');
+          // Settle delay — give WebGPU resources/queues a brief moment to settle
+          await sleep(150);
         } catch (stressErr) {
           console.error('[ONNX] ✗ GPU stress test FAILED:', stressErr.message,
             '— GPU cannot handle WebGPU workloads. Falling back to safer backend.');
@@ -3603,10 +3606,11 @@
         } else {
           const inputTensor = imageDataToONNXTensor(tileImageData, activeTileSize, activeTileSize);
           try {
-            // Session integrity check — WakeGuard may have nulled aiState.session mid-run.
+            // Session integrity check — WakeGuard or Global Catcher may have nulled session/triggered recovery.
             // Distinguish between user cancellation (cancelRequested=true) and WakeGuard
             // interference / GPU death (session nulled but user didn't cancel).
-            if (aiState.session !== capturedSession) {
+            if (aiState.session !== capturedSession || aiState.gpuDeviceLostTriggered) {
+              aiState.gpuDeviceLostTriggered = false; // Reset
               if (aiState.cancelRequested) {
                 throw new Error('Processing cancelled by user.');
               }
@@ -4797,6 +4801,33 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       }
     } finally {
       aiState._wakeGuardRunning = false;
+    }
+  });
+
+  // ===== GLOBAL UNHANDLED REJECTION CATCHER FOR WEBGPU DEVICE LOSS ===== //
+  // ONNX Runtime Web does some asynchronous mapAsync() calls inside internal promises
+  // that can reject with AbortError/device lost when the GPU driver hangs.
+  // These escape our try/catch blocks and trigger unhandled rejection events.
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason || {};
+    const errMsg = (reason.message || String(reason)).toLowerCase();
+    const isDeviceLost = errMsg.includes('device') || errMsg.includes('lost') ||
+      errMsg.includes('abort') || errMsg.includes('hung') || errMsg.includes('removed') ||
+      errMsg.includes('mapasync') || (reason.name && reason.name === 'AbortError');
+
+    if (isDeviceLost && aiState.backend === 'webgpu') {
+      console.warn('[Global Catcher] WebGPU device loss detected asynchronously:', reason.message || reason);
+      // Mark WebGPU as failed so we switch backends
+      aiState._webgpuFailed = true;
+      // Invalidate current session
+      aiState.session = null;
+      // If we are currently processing, force-fail the active tile loop so it triggers recovery
+      if (aiState.processing) {
+        console.warn('[Global Catcher] Active processing detected. Invalidate and trigger recovery.');
+        aiState.gpuDeviceLostTriggered = true;
+      }
+      // Prevent browser console from spamming the red error message
+      event.preventDefault();
     }
   });
 
