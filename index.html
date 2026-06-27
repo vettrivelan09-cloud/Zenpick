@@ -634,14 +634,19 @@
                     <span class="quality-tag tag-standard">Full HD</span>
                   </div>
                 </label>
-                <label class="quality-option" data-quality="720p">
-                  <input type="radio" name="quality" value="720p" />
-                  <div class="quality-card">
-                    <span class="quality-res">720p</span>
-                    <span class="quality-px" id="res-720p">1280×720</span>
-                    <span class="quality-tag tag-compact">HD Ready</span>
+                <div class="quality-option compressor-nav-card" id="compressor-nav-btn">
+                  <div class="quality-card compressor-card">
+                    <span class="quality-res compressor-icon-res">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                    </span>
+                    <span class="quality-px">Reduce file size</span>
+                    <span class="quality-tag tag-compressor">Compress</span>
                   </div>
-                </label>
+                </div>
                 <label class="quality-option" data-quality="original">
                   <input type="radio" name="quality" value="original" />
                   <div class="quality-card">
@@ -1338,6 +1343,155 @@
             </div>
 
           </div>
+
+          <!-- ===== IMAGE COMPRESSOR PANEL (hidden by default, replaces settings-panel) ===== -->
+          <div class="settings-panel compressor-panel" id="compressor-panel" style="display: none;">
+            <!-- Back to Enhancer button -->
+            <div style="margin-bottom: 1rem;">
+              <button id="compressor-back-btn" class="btn btn-ghost btn-sm" style="display: flex; align-items: center; gap: 6px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12"/>
+                  <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                ← Back to Enhancer
+              </button>
+            </div>
+
+            <!-- Quality Slider -->
+            <div class="settings-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                Quality
+              </h3>
+              <p class="settings-desc">Lower = smaller file, higher = better quality</p>
+              <div class="compressor-quality-control">
+                <div class="compressor-slider-row">
+                  <span class="compressor-slider-min">1%</span>
+                  <input type="range" id="compressor-quality-slider" min="1" max="100" value="80" class="range-slider compressor-range" />
+                  <span class="compressor-slider-max">100%</span>
+                  <span id="compressor-quality-val" class="compressor-quality-val">80%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Target File Size -->
+            <div class="settings-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
+                  <circle cx="12" cy="12" r="10"/>
+                  <circle cx="12" cy="12" r="6"/>
+                  <circle cx="12" cy="12" r="2"/>
+                </svg>
+                Target File Size
+              </h3>
+              <p class="settings-desc">Automatically find the quality to fit under a specific size</p>
+              <div class="compressor-target-row">
+                <input type="number" id="compressor-target-size" value="500" min="1" max="99999" class="compressor-target-input" />
+                <select id="compressor-target-unit" class="compressor-target-select">
+                  <option value="KB" selected>KB</option>
+                  <option value="MB">MB</option>
+                </select>
+                <button id="compressor-apply-target" class="btn btn-primary btn-sm compressor-apply-btn">Apply</button>
+              </div>
+              <p id="compressor-target-status" class="compressor-target-status" style="display: none;"></p>
+            </div>
+
+            <!-- Output Format -->
+            <div class="settings-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                Output Format
+              </h3>
+              <div class="compressor-format-grid">
+                <label class="compressor-format-option">
+                  <input type="radio" name="compressor-format" value="jpeg" checked />
+                  <div class="compressor-format-card">JPEG</div>
+                </label>
+                <label class="compressor-format-option">
+                  <input type="radio" name="compressor-format" value="png" />
+                  <div class="compressor-format-card">PNG</div>
+                </label>
+                <label class="compressor-format-option">
+                  <input type="radio" name="compressor-format" value="webp" />
+                  <div class="compressor-format-card">WebP</div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Resize -->
+            <div class="settings-section">
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
+                  <polyline points="15 3 21 3 21 9"/>
+                  <polyline points="9 21 3 21 3 15"/>
+                  <line x1="21" y1="3" x2="14" y2="10"/>
+                  <line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+                Resize
+              </h3>
+              <label class="compressor-resize-toggle">
+                <input type="checkbox" id="compressor-enable-resize" />
+                <span>Enable resize</span>
+              </label>
+              <div id="compressor-resize-controls" class="compressor-resize-controls" style="display: none;">
+                <div class="compressor-resize-inputs">
+                  <div class="input-group">
+                    <label for="compressor-resize-width">Width (px)</label>
+                    <input type="number" id="compressor-resize-width" min="1" max="15360" class="compressor-resize-input" />
+                  </div>
+                  <span class="custom-res-x">×</span>
+                  <div class="input-group">
+                    <label for="compressor-resize-height">Height (px)</label>
+                    <input type="number" id="compressor-resize-height" min="1" max="8640" class="compressor-resize-input" />
+                  </div>
+                </div>
+                <label class="aspect-lock" style="margin-top: 8px;">
+                  <input type="checkbox" id="compressor-lock-aspect" checked /> 🔒 Lock Aspect Ratio
+                </label>
+              </div>
+            </div>
+
+            <!-- Compression Stats Card -->
+            <div class="compressor-stats-card" id="compressor-stats-card">
+              <div class="compressor-stats-grid">
+                <div class="compressor-stat-item">
+                  <span class="compressor-stat-label">ORIGINAL</span>
+                  <span id="compressor-stat-original" class="compressor-stat-value">—</span>
+                </div>
+                <div class="compressor-stat-item">
+                  <span class="compressor-stat-label">COMPRESSED</span>
+                  <span id="compressor-stat-compressed" class="compressor-stat-value compressor-stat-highlight">—</span>
+                </div>
+                <div class="compressor-stat-item">
+                  <span class="compressor-stat-label">SAVED</span>
+                  <span id="compressor-stat-saved" class="compressor-stat-value compressor-stat-green">—</span>
+                </div>
+                <div class="compressor-stat-item">
+                  <span class="compressor-stat-label">DIMENSIONS</span>
+                  <span id="compressor-stat-dims" class="compressor-stat-value">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Compress & Download Button -->
+            <div style="margin-top: 1rem;">
+              <button id="compressor-download-btn" class="btn btn-primary btn-lg btn-full btn-glow compressor-download-btn">
+                <span class="btn-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </span>
+                Compress & Download
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

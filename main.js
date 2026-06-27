@@ -106,7 +106,7 @@
   // ===== CONSTANTS ===== //
   const qualityPresets = {
     '8k': { w: 7680, h: 4320 }, '4k': { w: 3840, h: 2160 },
-    '1080p': { w: 1920, h: 1080 }, '720p': { w: 1280, h: 720 },
+    '1080p': { w: 1920, h: 1080 },
     '480p': { w: 854, h: 480 }, '360p': { w: 640, h: 360 }
   };
   const MAX_SAFE_RES_PIXELS = 8500000;
@@ -358,7 +358,7 @@
     return s ? (parseInt(s.value) || 0) : 0;
   }
   function updateQualityBadges() {
-    ['8k', '4k', '1080p', '720p'].forEach(q => {
+    ['8k', '4k', '1080p'].forEach(q => {
       const dims = getTargetDimensions(q); const el = $(`#res-${q}`);
       if (el) el.textContent = `${dims.w}×${dims.h}`;
     });
@@ -574,6 +574,12 @@
     };
     img.src = url; previewImage.src = trackMemory(url); state.originalDataUrl = url;
     showStep('configure');
+
+    // Reset compressor panel when new file is loaded
+    const compPanel = document.getElementById('compressor-panel');
+    if (compPanel) compPanel.style.display = 'none';
+    const settPanel = document.querySelector('.settings-panel:not(.compressor-panel)');
+    if (settPanel) settPanel.style.display = '';
   }
 
   // ===== GIF FRAME EXTRACTION =====
@@ -1200,7 +1206,7 @@
         // Highlight protection: pixels above 215 get reduced boost
         const brightProtect = lum[i] > 215 ? Math.max(0, (255 - lum[i]) / 40) : 1.0;
         const delta = edge * microStr * brightProtect;
-        data[i * 4] = clamp(data[i * 4] + delta);
+        data[i * 4]     = clamp(data[i * 4]     + delta);
         data[i * 4 + 1] = clamp(data[i * 4 + 1] + delta);
         data[i * 4 + 2] = clamp(data[i * 4 + 2] + delta);
       }
@@ -2177,10 +2183,10 @@
 
   // Returns the correct tile size for the current backend
   function getActiveTileSize() {
-    return aiState.modelTileSize || 64;
+    return (aiState.backend === 'webgpu') ? AI_TILE_SIZE_WEBGPU : AI_TILE_SIZE;
   }
   function getActiveTileOverlap() {
-    return aiState.modelTileOverlap || 8;
+    return (aiState.backend === 'webgpu') ? 8 : 64;
   }
 
   const aiState = {
@@ -2194,10 +2200,7 @@
     processing: false,
     frameSkip: 1,        // PERF FIX 3: 1 = every frame, 2 = every 2nd frame (fast mode)
     cpuMode: false,      // True if using WASM backend (slower, needs optimizations)
-    scaleFactor: 4,      // PERF FIX 1: Effective scale factor (2 for 1080p CPU mode, 4 for 480p/720p)
-    modelTileSize: 64,   // Dynamically set based on model metadata (default 64)
-    modelTileOverlap: 8, // Dynamically set based on model metadata (default 8)
-    gpuDeviceLostTriggered: false
+    scaleFactor: 4       // PERF FIX 1: Effective scale factor (2 for 1080p CPU mode, 4 for 480p/720p)
   };
 
   const AI_RES_CONFIG = {
@@ -2303,26 +2306,6 @@
     }
   }
 
-  function detectSessionTileSize(session) {
-    let size = 64; // Default fallback
-    try {
-      const meta = session.inputMetadata || session.inputs;
-      if (meta) {
-        const firstInputName = session.inputNames[0] || 'input';
-        const inputInfo = meta[firstInputName] || (Array.isArray(meta) ? meta[0] : null);
-        if (inputInfo && inputInfo.dims) {
-          const h = inputInfo.dims[2];
-          if (typeof h === 'number' && h > 0) {
-            size = h;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[ONNX] Failed to inspect metadata:', e);
-    }
-    return size;
-  }
-
   // --- Section 3: ONNX Model Loader ---
   async function loadONNXModel() {
     if (aiState.session) return aiState.session;
@@ -2408,7 +2391,7 @@
           const url = parts[i];
           console.log(`[ONNX] Fetching split part ${i + 1}/${parts.length}:`, url);
           if (dlText) dlText.textContent = `Downloading AI brain… (part ${i + 1}/${parts.length})`;
-
+          
           const response = await fetch(url);
           if (!response.ok) {
             throw new Error(`HTTP ${response.status} ${response.statusText} on ${url}`);
@@ -2500,8 +2483,8 @@
     // Old code tried WASM first, meaning GPU was never used even when available.
     const hasWebGPU = !!(navigator.gpu);
 
-    // Try WebGPU first (Chrome 113+) — skip if it already crashed this session
-    if (hasWebGPU && !aiState._webgpuFailed) {
+    // Try WebGPU first (Chrome 113+)
+    if (hasWebGPU) {
       try {
         aiState.backend = 'webgpu';
         if (dlText) dlText.textContent = 'Loading AI model (WebGPU — GPU accelerated)…';
@@ -2510,38 +2493,7 @@
           executionProviders: ['webgpu'],
           graphOptimizationLevel: 'all'
         });
-        console.log('[ONNX] ✓ WebGPU session created — running GPU stress test…');
-
-        // ── GPU STRESS TEST ──
-        // Some GPUs (older Intel HD, weak mobile GPUs) pass session creation but crash
-        // on actual inference with DXGI_ERROR_DEVICE_HUNG / AbortError / device lost.
-        // Run a real 64×64 tile inference to flush out these failures BEFORE processing.
-        if (dlText) dlText.textContent = 'Testing GPU compatibility…';
-        try {
-          const STRESS_TILE = detectSessionTileSize(aiState.session);
-          console.log('[ONNX] Running GPU stress test with tile size:', STRESS_TILE);
-          const stressData = new Float32Array(1 * 3 * STRESS_TILE * STRESS_TILE);
-          // Fill with non-zero data — zero tiles may be optimized away by the GPU driver
-          for (let si = 0; si < stressData.length; si++) stressData[si] = Math.random() * 0.5 + 0.25;
-          const stressTensor = new ort.Tensor('float32', stressData, [1, 3, STRESS_TILE, STRESS_TILE]);
-          const stressFeeds = {};
-          stressFeeds[aiState.session.inputNames[0] || 'input'] = stressTensor;
-          // Race against a 10s timeout — if the GPU hangs, we don't wait forever
-          await Promise.race([
-            aiState.session.run(stressFeeds),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('GPU stress test timeout')), 10000))
-          ]);
-          console.log('[ONNX] ✓ GPU stress test passed — WebGPU is stable');
-          // Settle delay — give WebGPU resources/queues a brief moment to settle
-          await sleep(150);
-        } catch (stressErr) {
-          console.error('[ONNX] ✗ GPU stress test FAILED:', stressErr.message,
-            '— GPU cannot handle WebGPU workloads. Falling back to safer backend.');
-          // Mark WebGPU as failed so we never retry it this session
-          aiState._webgpuFailed = true;
-          try { aiState.session.release(); } catch (releaseErr) { /* session may already be dead */ }
-          aiState.session = null;
-        }
+        console.log('[ONNX] ✓ WebGPU session created — fastest mode!');
       } catch (e) {
         console.warn('[ONNX] WebGPU failed:', e.message);
         aiState.session = null;
@@ -2579,41 +2531,6 @@
       } catch (wasmErr) {
         throw new Error('Could not load AI model. Error: ' + wasmErr.message);
       }
-    }
-
-    // ── DYNAMIC TILE SIZE DETECTION ──
-    try {
-      const meta = aiState.session.inputMetadata || aiState.session.inputs;
-      if (meta) {
-        const firstInputName = aiState.session.inputNames[0] || 'input';
-        const inputInfo = meta[firstInputName] || (Array.isArray(meta) ? meta[0] : null);
-        if (inputInfo && inputInfo.dims) {
-          const h = inputInfo.dims[2];
-          const w = inputInfo.dims[3];
-          // If shape is static (e.g. 64 or 128), enforce it
-          if (typeof h === 'number' && h > 0) {
-            aiState.modelTileSize = h;
-            // Overlap: 8 for 64, or scale proportionally (12.5% of tile size)
-            aiState.modelTileOverlap = Math.max(4, Math.round(h * 0.125));
-            console.log('[ONNX] Detected static model tile size:', h, 'overlap:', aiState.modelTileOverlap);
-          } else {
-            // Dynamic shape (e.g. -1 or undefined) — we can choose optimal tile size based on backend
-            if (aiState.backend === 'webgpu') {
-              aiState.modelTileSize = 64;
-              aiState.modelTileOverlap = 8;
-            } else {
-              // WASM/WebGL: use larger tiles to reduce overhead
-              aiState.modelTileSize = 128;
-              aiState.modelTileOverlap = 16;
-            }
-            console.log('[ONNX] Model has dynamic tile size, using optimized backend default:', aiState.modelTileSize);
-          }
-        }
-      }
-    } catch (metaErr) {
-      console.warn('[ONNX] Could not query model metadata, using safe defaults:', metaErr);
-      aiState.modelTileSize = 64;
-      aiState.modelTileOverlap = 8;
     }
 
     console.log('[ONNX] Session created, backend:', aiState.backend, '| inputNames:', aiState.session.inputNames, '| outputNames:', aiState.session.outputNames);
@@ -3273,50 +3190,7 @@
     console.log('[ONNX Image] Pre-ONNX avg luminance:', preOnnxAvgLuma.toFixed(2));
 
     // Run the same tile-based ONNX engine used for video frames
-    // ── GPU DEVICE-LOST AUTO-RECOVERY ──
-    // If the GPU dies mid-processing (DXGI_ERROR_DEVICE_HUNG), processFrameWithONNX
-    // throws 'GPU_DEVICE_LOST'. We catch it, recreate the session with a safer backend
-    // (WebGL → WASM), and retry automatically — the user never needs to manually reload.
-    let onnxRetries = 0;
-    const MAX_ONNX_RETRIES = 2;
-    while (true) {
-      try {
-        await processFrameWithONNX(onnxSourceCanvas, outputCanvas);
-        break; // Success — exit retry loop
-      } catch (onnxErr) {
-        // User cancellation — propagate immediately, no retry
-        if (onnxErr.message && onnxErr.message.includes('cancelled by user')) throw onnxErr;
-
-        // GPU device lost — retry with fallback backend
-        if (onnxErr.message && onnxErr.message.includes('GPU_DEVICE_LOST') && onnxRetries < MAX_ONNX_RETRIES) {
-          onnxRetries++;
-          console.warn('[ONNX] GPU device lost — attempting recovery (retry', onnxRetries + '/' + MAX_ONNX_RETRIES + ')…');
-          if (statusEl) statusEl.textContent = 'GPU crashed — switching to safe mode…';
-          if (setProgressFn) setProgressFn(10);
-
-          // Destroy dead session and force reload with fallback backend
-          aiState.session = null;
-          aiState._webgpuFailed = true; // Prevent WebGPU from being tried again
-          await loadONNXModel(); // Will skip WebGPU, try WebGL → WASM
-
-          if (!aiState.session) throw new Error('Could not recover — all backends failed.');
-          console.log('[ONNX] ✓ Recovered with backend:', aiState.backend);
-          if (statusEl) statusEl.textContent = 'Recovered! Reprocessing with ' + aiState.backend + '…';
-
-          // Reset output canvas for fresh processing
-          outputCanvas.width = onnxSourceCanvas.width * AI_SCALE;
-          outputCanvas.height = onnxSourceCanvas.height * AI_SCALE;
-          const recoverCtx = outputCanvas.getContext('2d', { willReadFrequently: true });
-          recoverCtx.imageSmoothingEnabled = true;
-          recoverCtx.imageSmoothingQuality = 'high';
-          recoverCtx.drawImage(onnxSourceCanvas, 0, 0, outputCanvas.width, outputCanvas.height);
-          continue; // Retry with new backend
-        }
-
-        // Non-recoverable error — propagate up
-        throw onnxErr;
-      }
-    }
+    await processFrameWithONNX(onnxSourceCanvas, outputCanvas);
     aiState.onTileComplete = null; // clean up
     console.log('[ONNX Image] processFrameWithONNX done. Output size:', outputCanvas.width, 'x', outputCanvas.height);
     if (setProgressFn) setProgressFn(88);
@@ -3540,8 +3414,8 @@
 
 
   async function processFrameWithONNX(inputCanvas, outputCanvas) {
-    // Capture session reference at entry — if WakeGuard nulls it mid-run we detect it cleanly
-    const capturedSession = aiState.session;
+    // Mutable session reference — can be updated if session dies and is recreated
+    let capturedSession = aiState.session;
     if (!capturedSession) return;
     const inW = inputCanvas.width, inH = inputCanvas.height;
     const inCtx = inputCanvas.getContext('2d', { willReadFrequently: true });
@@ -3574,10 +3448,9 @@
     tileCanvas.height = activeTileSize;
     const tileCtx = tileCanvas.getContext('2d', { willReadFrequently: true });
 
-    const inputName = capturedSession.inputNames[0] || 'input';
+    let inputName = capturedSession.inputNames[0] || 'input';
     let tileIdx = 0;
     let skippedTiles = 0;
-    let consecutiveFailures = 0; // GPU device-lost detection
 
     for (let ty = 0; ty < tilesY; ty++) {
       for (let tx = 0; tx < tilesX; tx++) {
@@ -3605,73 +3478,98 @@
           outImageData = fbCtx.getImageData(0, 0, outTileSize, outTileSize);
         } else {
           const inputTensor = imageDataToONNXTensor(tileImageData, activeTileSize, activeTileSize);
-          try {
-            // Session integrity check — WakeGuard or Global Catcher may have nulled session/triggered recovery.
-            // Distinguish between user cancellation (cancelRequested=true) and WakeGuard
-            // interference / GPU death (session nulled but user didn't cancel).
-            if (aiState.session !== capturedSession || aiState.gpuDeviceLostTriggered) {
-              aiState.gpuDeviceLostTriggered = false; // Reset
-              if (aiState.cancelRequested) {
-                throw new Error('Processing cancelled by user.');
+          let tileRetries = 0;
+          const MAX_TILE_RETRIES = 2;
+          while (true) {
+            try {
+              // Session integrity check — detect if session died during sleep
+              if (!capturedSession || aiState._sessionDiedDuringSleep || aiState.session !== capturedSession) {
+                // User explicitly cancelled → propagate
+                if (aiState.cancelRequested) throw new Error('Processing cancelled by user.');
+                // Session died (e.g. laptop sleep) → try to recover
+                if (tileRetries >= MAX_TILE_RETRIES) {
+                  console.error('[ONNX] Session recovery failed after', MAX_TILE_RETRIES, 'attempts. Bicubic fallback for tile', tileIdx);
+                  throw new Error('Session recovery exhausted');
+                }
+                tileRetries++;
+                console.warn('[ONNX] Session died (sleep/wake). Attempting recovery', tileRetries + '/' + MAX_TILE_RETRIES, '...');
+                const statusEl = document.getElementById('processing-status');
+                if (statusEl) statusEl.textContent = 'AI engine recovering after sleep… (attempt ' + tileRetries + ')';
+                // Null out old session so loadONNXModel creates a fresh one
+                aiState.session = null;
+                aiState._sessionDiedDuringSleep = false;
+                // Temporarily clear processing flag so loadONNXModel doesn't conflict
+                aiState.processing = false;
+                try {
+                  await loadONNXModel();
+                } finally {
+                  aiState.processing = true;
+                }
+                if (!aiState.session) throw new Error('Session recovery failed — no session created');
+                capturedSession = aiState.session;
+                inputName = capturedSession.inputNames[0] || 'input';
+                console.log('[ONNX] ✓ Session recovered! Resuming from tile', tileIdx);
+                if (statusEl) statusEl.textContent = 'AI engine recovered ✓ Resuming processing…';
+                // Retry this tile with the new session
+                continue;
               }
-              // Session was invalidated by WakeGuard or GPU death — trigger auto-recovery
-              throw new Error('GPU_DEVICE_LOST: Session invalidated during processing');
+              const feeds = {};
+              feeds[inputName] = inputTensor;
+              const results = await capturedSession.run(feeds);
+              const outputTensor = Object.values(results)[0];
+              // Log tensor shape on first tile to debug output
+              if (tileIdx === 1) {
+                console.log('[ONNX] Output tensor dims:', outputTensor.dims, 'data length:', outputTensor.data.length);
+                console.log('[ONNX] First 6 float values:', outputTensor.data[0], outputTensor.data[1], outputTensor.data[2], outputTensor.data[3], outputTensor.data[4], outputTensor.data[5]);
+                console.log('[ONNX] Expected outTileSize:', outTileSize, 'planeSize should be:', outTileSize * outTileSize);
+              }
+              // Use actual tensor dims instead of assumed outTileSize
+              const tDims = outputTensor.dims; // [1, 3, H, W]
+              const tH = tDims[2], tW = tDims[3];
+              outImageData = onnxTensorToImageData(outputTensor.data, tW, tH);
+              break; // Tile succeeded — exit retry loop
+            } catch (e) {
+              // If user cancelled — propagate up immediately
+              if (e.message && e.message.includes('cancelled by user')) throw e;
+              // If session error during run() — could be sleep-related, try recovery
+              const isSessionError = e.message && (
+                e.message.includes('Session mismatch') ||
+                e.message.includes('Session already started') ||
+                e.message.includes('session is not ready') ||
+                e.message.includes('recovery exhausted')
+              );
+              if (isSessionError && tileRetries < MAX_TILE_RETRIES) {
+                tileRetries++;
+                console.warn('[ONNX] Tile', tileIdx, 'session error:', e.message, '— recovery attempt', tileRetries);
+                aiState.session = null;
+                aiState._sessionDiedDuringSleep = false;
+                aiState.processing = false;
+                try {
+                  await loadONNXModel();
+                } finally {
+                  aiState.processing = true;
+                }
+                if (!aiState.session) {
+                  console.error('[ONNX] Recovery failed — bicubic fallback for tile', tileIdx);
+                  break;
+                }
+                capturedSession = aiState.session;
+                inputName = capturedSession.inputNames[0] || 'input';
+                console.log('[ONNX] ✓ Session recovered after run() error. Retrying tile', tileIdx);
+                continue;
+              }
+              // Non-session error or retries exhausted — bicubic fallback for this tile
+              console.warn('[ONNX] Tile ' + tileIdx + ' failed, bicubic fallback:', e.message);
+              const fallbackCanvas = document.createElement('canvas');
+              fallbackCanvas.width = outTileSize;
+              fallbackCanvas.height = outTileSize;
+              const fbCtx = fallbackCanvas.getContext('2d');
+              fbCtx.imageSmoothingEnabled = true;
+              fbCtx.imageSmoothingQuality = 'high';
+              fbCtx.drawImage(tileCanvas, 0, 0, outTileSize, outTileSize);
+              outImageData = fbCtx.getImageData(0, 0, outTileSize, outTileSize);
+              break;
             }
-            const feeds = {};
-            feeds[inputName] = inputTensor;
-
-            // ── GPU HANG PROTECTION ──
-            // Set a timeout of 15 seconds per tile. If it hangs (e.g. due to WebGPU device loss),
-            // we reject and fall back safely instead of freezing the webpage.
-            const results = await Promise.race([
-              capturedSession.run(feeds),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('GPU tile timeout')), 15000))
-            ]);
-            const outputTensor = Object.values(results)[0];
-            // Log tensor shape on first tile to debug output
-            if (tileIdx === 1) {
-              console.log('[ONNX] Output tensor dims:', outputTensor.dims, 'data length:', outputTensor.data.length);
-              console.log('[ONNX] First 6 float values:', outputTensor.data[0], outputTensor.data[1], outputTensor.data[2], outputTensor.data[3], outputTensor.data[4], outputTensor.data[5]);
-              console.log('[ONNX] Expected outTileSize:', outTileSize, 'planeSize should be:', outTileSize * outTileSize);
-            }
-            // Use actual tensor dims instead of assumed outTileSize
-            const tDims = outputTensor.dims; // [1, 3, H, W]
-            const tH = tDims[2], tW = tDims[3];
-            outImageData = onnxTensorToImageData(outputTensor.data, tW, tH);
-            consecutiveFailures = 0; // Reset — this tile succeeded
-          } catch (e) {
-            // If session was replaced or user cancelled — propagate up immediately
-            if (e.message && e.message.includes('cancelled by user')) throw e;
-
-            // ── GPU DEVICE-LOST DETECTION ──
-            // DXGI_ERROR_DEVICE_HUNG / AbortError / 'device is lost' / timeout = GPU is dead.
-            // Don't silently bicubic-fallback every tile — that produces a non-AI result.
-            // Instead, throw a recoverable error so the caller can retry with a safer backend.
-            const errMsg = (e.message || '').toLowerCase();
-            const isDeviceLost = errMsg.includes('device') || errMsg.includes('lost') ||
-              errMsg.includes('abort') || errMsg.includes('hung') || errMsg.includes('removed') ||
-              errMsg.includes('mapasync') || errMsg.includes('timeout') || (e.name && e.name === 'AbortError');
-
-            consecutiveFailures++;
-            if (isDeviceLost || consecutiveFailures >= 3) {
-              console.error('[ONNX] GPU device lost detected after', consecutiveFailures,
-                'consecutive failures. Error:', e.message);
-              // Kill the dead session
-              aiState.session = null;
-              aiState._webgpuFailed = true;
-              throw new Error('GPU_DEVICE_LOST: ' + e.message);
-            }
-
-            // Single tile failure (not device-lost) — bicubic fallback for this tile only
-            console.warn('[ONNX] Tile ' + tileIdx + ' failed, bicubic fallback:', e.message);
-            const fallbackCanvas = document.createElement('canvas');
-            fallbackCanvas.width = outTileSize;
-            fallbackCanvas.height = outTileSize;
-            const fbCtx = fallbackCanvas.getContext('2d');
-            fbCtx.imageSmoothingEnabled = true;
-            fbCtx.imageSmoothingQuality = 'high';
-            fbCtx.drawImage(tileCanvas, 0, 0, outTileSize, outTileSize);
-            outImageData = fbCtx.getImageData(0, 0, outTileSize, outTileSize);
           }
         }
 
@@ -4123,7 +4021,7 @@
   // Works at HALF source resolution for best quality/speed balance.
   // Half-res (748×541) → ESRGAN 4× → 2992×2164 = true 4K output.
   async function upscaleFrameWithESRGAN(srcCanvas, outW, outH) {
-    const session = videoAI.model;
+    let session = videoAI.model;
     const tileSize = getActiveTileSize();    // 64 for WebGPU
     const overlap = getActiveTileOverlap(); // 8 for WebGPU
     const scale = videoAI.scale;          // 4
@@ -4191,9 +4089,65 @@
           }
         }
 
-        const inputName = session.inputNames[0] || 'input.1';
+        let inputName = session.inputNames[0] || 'input.1';
         const tensor = new ort.Tensor('float32', float32, [1, 3, tileSize, tileSize]);
-        const results = await session.run({ [inputName]: tensor });
+        let results;
+        let tileRetries = 0;
+        const MAX_TILE_RETRIES = 2;
+
+        while (true) {
+          try {
+            // Detect if session died during sleep
+            if (!session || aiState._sessionDiedDuringSleep || aiState.session !== session) {
+              if (aiState.cancelRequested) throw new Error('Processing cancelled by user.');
+              if (tileRetries >= MAX_TILE_RETRIES) throw new Error('Session recovery exhausted');
+              tileRetries++;
+              console.warn('[Video ONNX] Session died (sleep/wake). Recovering...');
+              aiState.session = null;
+              videoAI.model = null;
+              aiState._sessionDiedDuringSleep = false;
+              aiState.processing = false;
+              try {
+                await loadVideoAIModel();
+              } finally {
+                aiState.processing = true;
+              }
+              if (!videoAI.model) throw new Error('Session recovery failed');
+              session = videoAI.model;
+              inputName = session.inputNames[0] || 'input.1';
+              continue;
+            }
+            results = await session.run({ [inputName]: tensor });
+            break;
+          } catch (e) {
+            if (e.message && e.message.includes('cancelled by user')) throw e;
+            const isSessionError = e.message && (
+              e.message.includes('Session mismatch') ||
+              e.message.includes('Session already started') ||
+              e.message.includes('session is not ready') ||
+              e.message.includes('recovery exhausted')
+            );
+            if (isSessionError && tileRetries < MAX_TILE_RETRIES) {
+              tileRetries++;
+              console.warn('[Video ONNX] Session run error, recovering...', e.message);
+              aiState.session = null;
+              videoAI.model = null;
+              aiState._sessionDiedDuringSleep = false;
+              aiState.processing = false;
+              try {
+                await loadVideoAIModel();
+              } finally {
+                aiState.processing = true;
+              }
+              if (!videoAI.model) break;
+              session = videoAI.model;
+              inputName = session.inputNames[0] || 'input.1';
+              continue;
+            }
+            console.error('[Video ONNX] Inference failed:', e.message);
+            throw e;
+          }
+        }
         const outputData = results[Object.keys(results)[0]].data;
 
         const ts = tileSize * scale, ox = sx * scale, oy = sy * scale, ov = overlap * scale;
@@ -4518,7 +4472,6 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
   // --- Section 10: runAIProcessing — routes image vs video ---
   async function runAIProcessing() {
     if (aiState.processing || !state.file) return;
-    aiState.processing = true; // Guard WakeGuard from interfering during image ONNX processing
     const tier = aiState.detectedTier;
     const cfg = AI_RES_CONFIG[tier];
 
@@ -4740,9 +4693,11 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
     // 200ms settle delay — give the processing flag time to be set if we woke during start
     await new Promise(r => setTimeout(r, 200));
 
-    // Do NOT run if ONNX tiles are actively in-flight — concurrent session.run() is not safe
+    // If tiles are actively in-flight, don't probe (concurrent session.run() is unsafe).
+    // Instead, set a flag so the tile loop itself can detect and recover between tiles.
     if (aiState.processing) {
-      console.log('[WakeGuard] Processing active — skipping session check (race condition guard)');
+      console.log('[WakeGuard] Processing active — flagging session for recovery between tiles');
+      aiState._sessionDiedDuringSleep = true;
       return;
     }
     // Mutex: prevent two WakeGuard probes from running simultaneously (e.g. rapid tab switches)
@@ -4777,65 +4732,488 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       ]);
       console.log('[WakeGuard] ✓ ONNX session is healthy after wake');
     } catch (e) {
-      const errMsg = e.message || '';
-      // 'Session already started' = session is alive but busy — NOT a failure.
-      // This happens if we wake while a session.run() is still completing.
-      // Do NOT kill the session — it's perfectly healthy.
-      if (errMsg.includes('already started') || errMsg.includes('already running')) {
-        console.log('[WakeGuard] Session is busy (not dead) — skipping cleanup');
-      } else {
-        console.error('[WakeGuard] ✗ ONNX session died during sleep:', errMsg);
-        // Mark WebGPU as failed if this was a GPU device death
-        const isGpuDeath = errMsg.toLowerCase().includes('device') ||
-          errMsg.toLowerCase().includes('lost') || errMsg.toLowerCase().includes('abort') ||
-          errMsg.toLowerCase().includes('hung');
-        if (isGpuDeath && aiState.backend === 'webgpu') {
-          aiState._webgpuFailed = true;
-        }
-        // Null out the dead session so loadONNXModel() will create a fresh one
-        aiState.session = null;
-        videoAI.model = null;
-        // Only show the toast on configure screen — on result screen it is confusing noise
-        if (state.currentStep === 'configure') {
-          var wakeToast = document.createElement('div');
-          wakeToast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10001;background:rgba(255,71,87,0.15);border:1px solid rgba(255,71,87,0.4);color:#ff6b6b;padding:14px 28px;border-radius:12px;font-family:Inter,sans-serif;font-size:0.88rem;font-weight:600;backdrop-filter:blur(10px);max-width:520px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
-          wakeToast.textContent = isGpuDeath
-            ? 'GPU disconnected — will use safe mode next time. Click Enhance Now to restart.'
-            : 'AI engine reconnecting… Click Enhance Now to restart.';
-          document.body.appendChild(wakeToast);
-          setTimeout(function () { wakeToast.style.transition = 'opacity 0.5s'; wakeToast.style.opacity = '0'; setTimeout(function () { wakeToast.remove(); }, 600); }, 8000);
-        }
+      console.error('[WakeGuard] ✗ ONNX session died during sleep:', e.message);
+      // Null out the dead session so loadONNXModel() will create a fresh one
+      aiState.session = null;
+      videoAI.model = null;
+      // Only show the toast on configure screen — on result screen it is confusing noise
+      if (state.currentStep === 'configure') {
+        var wakeToast = document.createElement('div');
+        wakeToast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10001;background:rgba(255,71,87,0.15);border:1px solid rgba(255,71,87,0.4);color:#ff6b6b;padding:14px 28px;border-radius:12px;font-family:Inter,sans-serif;font-size:0.88rem;font-weight:600;backdrop-filter:blur(10px);max-width:520px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+        wakeToast.textContent = 'AI engine reconnecting… Click Enhance Now to restart.';
+        document.body.appendChild(wakeToast);
+        setTimeout(function () { wakeToast.style.transition = 'opacity 0.5s'; wakeToast.style.opacity = '0'; setTimeout(function () { wakeToast.remove(); }, 600); }, 8000);
       }
     } finally {
       aiState._wakeGuardRunning = false;
     }
   });
 
-  // ===== GLOBAL UNHANDLED REJECTION CATCHER FOR WEBGPU DEVICE LOSS ===== //
-  // ONNX Runtime Web does some asynchronous mapAsync() calls inside internal promises
-  // that can reject with AbortError/device lost when the GPU driver hangs.
-  // These escape our try/catch blocks and trigger unhandled rejection events.
-  window.addEventListener('unhandledrejection', (event) => {
-    const reason = event.reason || {};
-    const errMsg = (reason.message || String(reason)).toLowerCase();
-    const isDeviceLost = errMsg.includes('device') || errMsg.includes('lost') ||
-      errMsg.includes('abort') || errMsg.includes('hung') || errMsg.includes('removed') ||
-      errMsg.includes('mapasync') || (reason.name && reason.name === 'AbortError');
+  // ===== IMAGE COMPRESSOR MODULE ===== //
+  (function initImageCompressor() {
+    // --- DOM refs ---
+    const compressorNavBtn = document.getElementById('compressor-nav-btn');
+    const compressorPanel = document.getElementById('compressor-panel');
+    const compressorBackBtn = document.getElementById('compressor-back-btn');
+    const settingsPanel = document.querySelector('.settings-panel:not(.compressor-panel)');
+    const qualitySlider = document.getElementById('compressor-quality-slider');
+    const qualityVal = document.getElementById('compressor-quality-val');
+    const targetSizeInput = document.getElementById('compressor-target-size');
+    const targetUnitSelect = document.getElementById('compressor-target-unit');
+    const applyTargetBtn = document.getElementById('compressor-apply-target');
+    const targetStatus = document.getElementById('compressor-target-status');
+    const enableResize = document.getElementById('compressor-enable-resize');
+    const resizeControls = document.getElementById('compressor-resize-controls');
+    const resizeWidth = document.getElementById('compressor-resize-width');
+    const resizeHeight = document.getElementById('compressor-resize-height');
+    const lockAspect = document.getElementById('compressor-lock-aspect');
+    const downloadBtn = document.getElementById('compressor-download-btn');
+    const statOriginal = document.getElementById('compressor-stat-original');
+    const statCompressed = document.getElementById('compressor-stat-compressed');
+    const statSaved = document.getElementById('compressor-stat-saved');
+    const statDims = document.getElementById('compressor-stat-dims');
 
-    if (isDeviceLost && aiState.backend === 'webgpu') {
-      console.warn('[Global Catcher] WebGPU device loss detected asynchronously:', reason.message || reason);
-      // Mark WebGPU as failed so we switch backends
-      aiState._webgpuFailed = true;
-      // Invalidate current session
-      aiState.session = null;
-      // If we are currently processing, force-fail the active tile loop so it triggers recovery
-      if (aiState.processing) {
-        console.warn('[Global Catcher] Active processing detected. Invalidate and trigger recovery.');
-        aiState.gpuDeviceLostTriggered = true;
-      }
-      // Prevent browser console from spamming the red error message
-      event.preventDefault();
+    let compressorBlob = null; // holds the latest compressed blob
+    let compressorAspectRatio = 1;
+    let isUpdating = false; // debounce flag
+    let updateTimer = null;
+
+    // --- Helper: get selected compressor format ---
+    function getCompressorFormat() {
+      const c = document.querySelector('input[name="compressor-format"]:checked');
+      return c ? c.value : 'jpeg';
     }
-  });
+
+    // --- Helper: get MIME type for format ---
+    function getMimeType(fmt) {
+      if (fmt === 'jpeg' || fmt === 'jpg') return 'image/jpeg';
+      if (fmt === 'png') return 'image/png';
+      if (fmt === 'webp') return 'image/webp';
+      return 'image/jpeg';
+    }
+
+    // --- Helper: get file extension for format ---
+    function getExtension(fmt) {
+      if (fmt === 'jpeg' || fmt === 'jpg') return 'jpg';
+      return fmt;
+    }
+
+    // --- Helper: pad blob to exactly targetBytes ---
+    function padBlobToSize(blob, targetBytes) {
+      if (!targetBytes || blob.size >= targetBytes) return blob;
+      const paddingNeeded = targetBytes - blob.size;
+      const padding = new Uint8Array(paddingNeeded);
+      return new Blob([blob, padding], { type: blob.type });
+    }
+
+    // --- Core: compress the image at given quality ---
+    function compressImage(quality, format, resW, resH) {
+      return new Promise((resolve, reject) => {
+        if (!state.originalDataUrl) { reject(new Error('No image loaded')); return; }
+        const img = new Image();
+        img.onload = function () {
+          const cW = resW || img.naturalWidth;
+          const cH = resH || img.naturalHeight;
+          const c = document.createElement('canvas');
+          c.width = cW;
+          c.height = cH;
+          const ctx2 = c.getContext('2d');
+          ctx2.imageSmoothingEnabled = true;
+          ctx2.imageSmoothingQuality = 'high';
+          ctx2.drawImage(img, 0, 0, cW, cH);
+          const mime = getMimeType(format);
+          // PNG doesn't support quality param, so always lossless
+          if (format === 'png') {
+            c.toBlob(function (blob) {
+              resolve({ blob, width: cW, height: cH });
+            }, mime);
+          } else {
+            c.toBlob(function (blob) {
+              resolve({ blob, width: cW, height: cH });
+            }, mime, quality / 100);
+          }
+        };
+        img.onerror = function () { reject(new Error('Failed to load image')); };
+        img.src = state.originalDataUrl;
+      });
+    }
+
+    // --- Update stats display ---
+    function updateStats(compressedSize, width, height) {
+      const origSize = state.originalSize || 0;
+      if (statOriginal) statOriginal.textContent = formatBytes(origSize);
+      if (statCompressed) statCompressed.textContent = formatBytes(compressedSize);
+      if (statDims) statDims.textContent = `${width}×${height}`;
+      if (statSaved) {
+        if (origSize > 0 && compressedSize > 0) {
+          const savedPct = ((1 - compressedSize / origSize) * 100);
+          if (savedPct > 0) {
+            statSaved.textContent = savedPct.toFixed(1) + '%';
+            statSaved.style.color = '#34d399';
+          } else {
+            statSaved.textContent = '+' + Math.abs(savedPct).toFixed(1) + '%';
+            statSaved.style.color = '#fbbf24';
+          }
+        } else {
+          statSaved.textContent = '—';
+        }
+      }
+    }
+
+    // --- Helper: update preview image scale based on custom dimensions ---
+    function updatePreviewScale() {
+      const previewImg = document.getElementById('preview-image');
+      if (!previewImg || !state.originalWidth) return;
+
+      let ratio = 1;
+      if (enableResize?.checked) {
+        const w = parseInt(resizeWidth?.value) || state.originalWidth;
+        ratio = w / state.originalWidth;
+      }
+
+      // Limit visual scale representation between 5% and 100% to keep it clean and visible
+      const visualRatio = Math.max(0.05, Math.min(1.0, ratio));
+
+      // Apply transition for smooth resize visual changes
+      previewImg.style.transition = 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
+      previewImg.style.width = (visualRatio * 100) + '%';
+      previewImg.style.height = 'auto';
+      previewImg.style.maxHeight = (visualRatio * 400) + 'px';
+    }
+
+    // --- Live compression preview (debounced) ---
+    function scheduleCompressPreview() {
+      if (updateTimer) clearTimeout(updateTimer);
+      updateTimer = setTimeout(doCompressPreview, 250);
+    }
+
+    async function doCompressPreview() {
+      if (isUpdating || !state.originalDataUrl) return;
+      isUpdating = true;
+      try {
+        const quality = parseInt(qualitySlider?.value) || 80;
+        const format = getCompressorFormat();
+        let rW = 0, rH = 0;
+        if (enableResize?.checked) {
+          rW = parseInt(resizeWidth?.value) || 0;
+          rH = parseInt(resizeHeight?.value) || 0;
+        }
+        const result = await compressImage(quality, format, rW, rH);
+        let finalBlob = result.blob;
+        if (state.compressorTargetBytes && finalBlob.size < state.compressorTargetBytes) {
+          finalBlob = padBlobToSize(finalBlob, state.compressorTargetBytes);
+        }
+        compressorBlob = finalBlob;
+        updateStats(finalBlob.size, result.width, result.height);
+
+        // Update preview image to show compressed result
+        const previewImg = document.getElementById('preview-image');
+        if (previewImg && compressorBlob) {
+          const url = URL.createObjectURL(compressorBlob);
+          previewImg.src = url;
+          updatePreviewScale();
+        }
+      } catch (e) {
+        console.warn('[Compressor] Preview error:', e);
+      } finally {
+        isUpdating = false;
+      }
+    }
+
+    // --- Switch to compressor panel ---
+    function showCompressorPanel() {
+      if (!state.originalDataUrl) return; // no image loaded
+      state.compressorTargetBytes = null; // Clear previous target setting
+      if (settingsPanel) settingsPanel.style.display = 'none';
+      if (compressorPanel) {
+        compressorPanel.style.display = 'block';
+        compressorPanel.style.animation = 'none';
+        void compressorPanel.offsetHeight; // reflow
+        compressorPanel.style.animation = '';
+      }
+      // Hide the floating enhance button when in compressor mode
+      if (fab) { fab.classList.remove('visible'); fab.style.display = 'none'; }
+
+      // Initialize resize inputs with original dimensions
+      compressorAspectRatio = (state.originalWidth || 1920) / (state.originalHeight || 1080);
+      if (resizeWidth) resizeWidth.value = state.originalWidth || 1920;
+      if (resizeHeight) resizeHeight.value = state.originalHeight || 1080;
+
+      // Initialize stats with original values
+      if (statOriginal) statOriginal.textContent = formatBytes(state.originalSize || 0);
+      if (statDims) statDims.textContent = `${state.originalWidth || 0}×${state.originalHeight || 0}`;
+
+      // Deselect all quality radio buttons so the compressor card looks active
+      document.querySelectorAll('input[name="quality"]').forEach(r => r.checked = false);
+
+      // Run initial compression preview
+      doCompressPreview();
+      updatePreviewScale();
+    }
+
+    // --- Switch back to enhancer panel ---
+    function showEnhancerPanel() {
+      state.compressorTargetBytes = null; // Clear target setting
+      if (compressorPanel) compressorPanel.style.display = 'none';
+      if (settingsPanel) settingsPanel.style.display = '';
+
+      // Restore the floating enhance bar
+      if (fab && state.currentStep === 'configure') {
+        fab.classList.add('visible');
+        fab.style.display = 'block';
+      }
+
+      // Restore 4k as default quality selection
+      const q4k = document.querySelector('input[name="quality"][value="4k"]');
+      if (q4k) q4k.checked = true;
+
+      // Restore preview to original image and reset scale/width constraints
+      const previewImg = document.getElementById('preview-image');
+      if (previewImg) {
+        if (state.originalDataUrl) {
+          previewImg.src = state.originalDataUrl;
+        }
+        previewImg.style.width = '';
+        previewImg.style.height = '';
+        previewImg.style.maxHeight = '';
+        previewImg.style.transform = '';
+      }
+
+      updateQualityBadges();
+      updateSizeEstimation();
+    }
+
+    // --- Target file size: binary search for quality ---
+    async function applyTargetSize() {
+      if (!state.originalDataUrl) return;
+      const sizeVal = parseInt(targetSizeInput?.value) || 500;
+      const unit = targetUnitSelect?.value || 'KB';
+      const targetBytes = unit === 'MB' ? sizeVal * 1024 * 1024 : sizeVal * 1024;
+      const format = getCompressorFormat();
+
+      if (format === 'png') {
+        if (targetStatus) {
+          targetStatus.style.display = 'block';
+          targetStatus.style.color = '#fbbf24';
+          targetStatus.textContent = 'PNG is lossless — quality slider has no effect. Try JPEG or WebP.';
+        }
+        return;
+      }
+
+      let rW = 0, rH = 0;
+      if (enableResize?.checked) {
+        rW = parseInt(resizeWidth?.value) || 0;
+        rH = parseInt(resizeHeight?.value) || 0;
+      }
+
+      if (targetStatus) {
+        targetStatus.style.display = 'block';
+        targetStatus.style.color = '#06b6d4';
+        targetStatus.textContent = 'Finding optimal quality...';
+      }
+
+      // Binary search between 1 and 100
+      let lo = 1, hi = 100, bestQ = 1;
+      for (let i = 0; i < 10; i++) {
+        const mid = Math.floor((lo + hi) / 2);
+        try {
+          const result = await compressImage(mid, format, rW, rH);
+          if (result.blob.size <= targetBytes) {
+            bestQ = mid;
+            lo = mid + 1;
+          } else {
+            hi = mid - 1;
+          }
+        } catch (e) { break; }
+      }
+
+      // Set the quality slider to the found value
+      if (qualitySlider) qualitySlider.value = bestQ;
+      if (qualityVal) qualityVal.textContent = bestQ + '%';
+
+      // Do final compression at the found quality
+      try {
+        const finalResult = await compressImage(bestQ, format, rW, rH);
+        let finalBlob = finalResult.blob;
+        
+        if (finalBlob.size <= targetBytes) {
+          state.compressorTargetBytes = targetBytes;
+          finalBlob = padBlobToSize(finalBlob, targetBytes);
+        } else {
+          state.compressorTargetBytes = null;
+        }
+
+        compressorBlob = finalBlob;
+        updateStats(finalBlob.size, finalResult.width, finalResult.height);
+
+        // Update preview
+        const previewImg = document.getElementById('preview-image');
+        if (previewImg && compressorBlob) {
+          previewImg.src = URL.createObjectURL(compressorBlob);
+          updatePreviewScale();
+        }
+
+        if (targetStatus) {
+          if (finalBlob.size >= targetBytes) {
+            targetStatus.style.color = '#34d399';
+            let msg = `Target size applied! Quality set to ${bestQ}% (padded to exactly ${formatBytes(finalBlob.size)}).`;
+            targetStatus.textContent = msg;
+          } else {
+            targetStatus.style.color = '#fbbf24';
+            targetStatus.textContent = `Could not reach target. Minimum quality (1%) is ${formatBytes(finalBlob.size)}.`;
+          }
+        }
+      } catch (e) {
+        if (targetStatus) {
+          targetStatus.style.color = '#ff6b6b';
+          targetStatus.textContent = 'Error during compression.';
+        }
+      }
+    }
+
+    // --- Download compressed image ---
+    async function downloadCompressed() {
+      // Force a fresh compression with current settings to ensure it is 100% accurate and matches stats
+      const quality = parseInt(qualitySlider?.value) || 80;
+      const format = getCompressorFormat();
+      let rW = 0, rH = 0;
+      if (enableResize?.checked) {
+        rW = parseInt(resizeWidth?.value) || 0;
+        rH = parseInt(resizeHeight?.value) || 0;
+      }
+
+      // Show loading state on download button
+      const originalText = downloadBtn.innerHTML;
+      downloadBtn.disabled = true;
+      downloadBtn.innerHTML = `
+        <span class="btn-spinner" style="display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-radius:50%; border-top-color:#fff; animation:splashSpin 1s linear infinite; margin-right:8px; vertical-align:text-bottom;"></span>
+        Compressing...
+      `;
+
+      try {
+        const result = await compressImage(quality, format, rW, rH);
+        let finalBlob = result.blob;
+        if (state.compressorTargetBytes && finalBlob.size < state.compressorTargetBytes) {
+          finalBlob = padBlobToSize(finalBlob, state.compressorTargetBytes);
+        }
+        compressorBlob = finalBlob;
+        updateStats(finalBlob.size, result.width, result.height);
+        triggerDownload();
+      } catch (e) {
+        console.error('[Compressor] Download compression failed:', e);
+        if (compressorBlob) triggerDownload();
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = originalText;
+      }
+    }
+
+    function triggerDownload() {
+      if (!compressorBlob) return;
+      const format = getCompressorFormat();
+      const ext = getExtension(format);
+      const origName = state.file ? state.file.name.replace(/\.[^/.]+$/, '') : 'image';
+      const url = URL.createObjectURL(compressorBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${origName}_compressed.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 300);
+    }
+
+    // --- Event Bindings ---
+    // Click on compressor nav card
+    if (compressorNavBtn) {
+      compressorNavBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showCompressorPanel();
+      });
+    }
+
+    // Back button
+    if (compressorBackBtn) {
+      compressorBackBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        showEnhancerPanel();
+      });
+    }
+
+    // Quality slider
+    if (qualitySlider) {
+      qualitySlider.addEventListener('input', function () {
+        if (qualityVal) qualityVal.textContent = this.value + '%';
+        // Clear target status when manually adjusting
+        if (targetStatus) targetStatus.style.display = 'none';
+        state.compressorTargetBytes = null;
+        scheduleCompressPreview();
+      });
+    }
+
+    // Format radio buttons
+    document.querySelectorAll('input[name="compressor-format"]').forEach(radio => {
+      radio.addEventListener('change', function () {
+        if (targetStatus) targetStatus.style.display = 'none';
+        state.compressorTargetBytes = null;
+        scheduleCompressPreview();
+      });
+    });
+
+    // Target size apply button
+    if (applyTargetBtn) {
+      applyTargetBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        applyTargetSize();
+      });
+    }
+
+    // Enable resize checkbox
+    if (enableResize) {
+      enableResize.addEventListener('change', function () {
+        if (resizeControls) {
+          resizeControls.style.display = this.checked ? 'block' : 'none';
+        }
+        state.compressorTargetBytes = null;
+        updatePreviewScale();
+        scheduleCompressPreview();
+      });
+    }
+
+    // Resize width/height with aspect lock
+    if (resizeWidth) {
+      resizeWidth.addEventListener('input', function () {
+        if (lockAspect?.checked && compressorAspectRatio > 0) {
+          const w = parseInt(this.value) || 0;
+          if (resizeHeight) resizeHeight.value = Math.round(w / compressorAspectRatio);
+        }
+        updatePreviewScale();
+        scheduleCompressPreview();
+      });
+    }
+    if (resizeHeight) {
+      resizeHeight.addEventListener('input', function () {
+        if (lockAspect?.checked && compressorAspectRatio > 0) {
+          const h = parseInt(this.value) || 0;
+          if (resizeWidth) resizeWidth.value = Math.round(h * compressorAspectRatio);
+        }
+        updatePreviewScale();
+        scheduleCompressPreview();
+      });
+    }
+
+    // Download button
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        downloadCompressed();
+      });
+    }
+
+    console.log('[Compressor] Image Compressor module initialized');
+  })();
 
 })();
