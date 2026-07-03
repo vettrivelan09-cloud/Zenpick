@@ -1812,9 +1812,25 @@
     // Show the TRUE original — strip CSS filters AND restore original src if canvas preview is active
     if (previewImage) {
       previewImage._srcBeforeCompare = previewImage.src;   // save edited src
-      if (state.originalDataUrl) previewImage.src = state.originalDataUrl;
+      // Save inline scale styles set by compressor resize preview
+      previewImage._styleBeforeCompare = {
+        width: previewImage.style.width,
+        height: previewImage.style.height,
+        maxHeight: previewImage.style.maxHeight,
+        transition: previewImage.style.transition
+      };
+      // When in compressor mode from result page, the true original is in the backup
+      const trueOriginal = (state.backupOriginalState && state.backupOriginalState.originalDataUrl)
+        ? state.backupOriginalState.originalDataUrl
+        : state.originalDataUrl;
+      if (trueOriginal) previewImage.src = trueOriginal;
       previewImage.style.filter = 'none';
       previewImage.style.imageRendering = 'auto';
+      // Reset compressor resize scale so original shows at full size
+      previewImage.style.width = '';
+      previewImage.style.height = '';
+      previewImage.style.maxHeight = '';
+      previewImage.style.transition = '';
     }
     const label = document.getElementById('compare-original-label');
     if (label) label.style.display = 'flex';
@@ -1825,6 +1841,14 @@
       if (previewImage._srcBeforeCompare) {
         previewImage.src = previewImage._srcBeforeCompare;
         previewImage._srcBeforeCompare = null;
+      }
+      // Restore inline scale styles from compressor resize
+      if (previewImage._styleBeforeCompare) {
+        previewImage.style.width = previewImage._styleBeforeCompare.width || '';
+        previewImage.style.height = previewImage._styleBeforeCompare.height || '';
+        previewImage.style.maxHeight = previewImage._styleBeforeCompare.maxHeight || '';
+        previewImage.style.transition = previewImage._styleBeforeCompare.transition || '';
+        previewImage._styleBeforeCompare = null;
       }
       previewImage.style.filter = _currentPreviewFilter || 'none';
       previewImage.style.imageRendering = (getUpscaleMultiplier() > 0) ? 'high-quality' : 'auto';
@@ -1977,6 +2001,7 @@
   safeBind('#btn-download', 'click', downloadResult, true);
   safeBind('#btn-restart', 'click', () => {
     state.file = null; state.originalDataUrl = null; state.processedDataUrl = null;
+    state.backupOriginalState = null; state.compressorSource = null;
     const fi = $('#file-input'); if (fi) fi.value = '';
     if (previewImage) previewImage.classList.remove('visible');
     if (previewVideo) {
@@ -4957,30 +4982,56 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       if (compressorPanel) compressorPanel.style.display = 'none';
       if (settingsPanel) settingsPanel.style.display = '';
 
-      // Restore the floating enhance bar
-      if (fab && state.currentStep === 'configure') {
-        fab.classList.add('visible');
-        fab.style.display = 'block';
-      }
+      // Restore original state if we came from the result screen
+      if (state.compressorSource === 'result' && state.backupOriginalState) {
+        state.originalDataUrl = state.backupOriginalState.originalDataUrl;
+        state.originalWidth = state.backupOriginalState.originalWidth;
+        state.originalHeight = state.backupOriginalState.originalHeight;
+        state.originalSize = state.backupOriginalState.originalSize;
+        state.file = state.backupOriginalState.file;
+        state.fileType = state.backupOriginalState.fileType;
+        state.backupOriginalState = null;
 
-      // Restore 4k as default quality selection
-      const q4k = document.querySelector('input[name="quality"][value="4k"]');
-      if (q4k) q4k.checked = true;
-
-      // Restore preview to original image and reset scale/width constraints
-      const previewImg = document.getElementById('preview-image');
-      if (previewImg) {
-        if (state.originalDataUrl) {
+        // Restore preview to original preview image
+        const previewImg = document.getElementById('preview-image');
+        if (previewImg && state.originalDataUrl) {
           previewImg.src = state.originalDataUrl;
+          previewImg.style.width = '';
+          previewImg.style.height = '';
+          previewImg.style.maxHeight = '';
+          previewImg.style.transform = '';
         }
-        previewImg.style.width = '';
-        previewImg.style.height = '';
-        previewImg.style.maxHeight = '';
-        previewImg.style.transform = '';
+
+        // Go back to the result screen
+        showStep('result');
+      } else {
+        // Restore the floating enhance bar
+        if (fab && state.currentStep === 'configure') {
+          fab.classList.add('visible');
+          fab.style.display = 'block';
+        }
+
+        // Restore 4k as default quality selection
+        const q4k = document.querySelector('input[name="quality"][value="4k"]');
+        if (q4k) q4k.checked = true;
+
+        // Restore preview to original image and reset scale/width constraints
+        const previewImg = document.getElementById('preview-image');
+        if (previewImg) {
+          if (state.originalDataUrl) {
+            previewImg.src = state.originalDataUrl;
+          }
+          previewImg.style.width = '';
+          previewImg.style.height = '';
+          previewImg.style.maxHeight = '';
+          previewImg.style.transform = '';
+        }
+
+        updateQualityBadges();
+        updateSizeEstimation();
       }
 
-      updateQualityBadges();
-      updateSizeEstimation();
+      state.compressorSource = null;
     }
 
     // --- Target file size: binary search for quality ---
@@ -5132,6 +5183,76 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
         e.preventDefault();
         e.stopPropagation();
         showCompressorPanel();
+      });
+    }
+
+    // Click on compress image on results screen
+    const compressResultBtn = document.getElementById('btn-compress-result');
+    if (compressResultBtn) {
+      compressResultBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!state.processedDataUrl) {
+          alert('No enhanced image to compress.');
+          return;
+        }
+
+        // Show loading state on button
+        compressResultBtn.disabled = true;
+        const originalText = compressResultBtn.innerHTML;
+        compressResultBtn.innerHTML = `
+          <span class="btn-spinner" style="display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-radius:50%; border-top-color:#fff; animation:splashSpin 1s linear infinite; margin-right:8px; vertical-align:text-bottom;"></span>
+          Preparing...
+        `;
+
+        // 1. Back up the original image state if not already backed up
+        if (!state.backupOriginalState) {
+          state.backupOriginalState = {
+            originalDataUrl: state.originalDataUrl,
+            originalWidth: state.originalWidth,
+            originalHeight: state.originalHeight,
+            originalSize: state.originalSize,
+            file: state.file,
+            fileType: state.fileType
+          };
+        }
+
+        // 2. Calculate size of enhanced image in bytes
+        let enhancedBytes = 0;
+        if (state.processedDataUrl && state.processedDataUrl.startsWith('data:')) {
+          const base64Str = state.processedDataUrl.split(',')[1] || '';
+          const padding = (base64Str.endsWith('==') ? 2 : base64Str.endsWith('=') ? 1 : 0);
+          enhancedBytes = Math.floor(base64Str.length * 3 / 4) - padding;
+        }
+
+        // 3. Load image to get actual dimensions
+        const img = new Image();
+        img.onload = function () {
+          state.originalDataUrl = state.processedDataUrl;
+          state.originalWidth = img.naturalWidth;
+          state.originalHeight = img.naturalHeight;
+          state.originalSize = enhancedBytes;
+
+          // Mark source of compressor
+          state.compressorSource = 'result';
+
+          // Update step to configure
+          showStep('configure');
+
+          // Reset button text & state
+          compressResultBtn.disabled = false;
+          compressResultBtn.innerHTML = originalText;
+
+          // Show compressor panel
+          showCompressorPanel();
+        };
+        img.onerror = function () {
+          alert('Failed to load enhanced image for compression.');
+          compressResultBtn.disabled = false;
+          compressResultBtn.innerHTML = originalText;
+        };
+        img.src = state.processedDataUrl;
       });
     }
 
