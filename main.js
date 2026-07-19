@@ -469,9 +469,9 @@
       if (isNaN(ratio) || ratio === 0) {
         badge.textContent = 'Calculating...';
       } else if (ratio > 1) {
-        badge.textContent = `↑ ~${ratio.toFixed(1)}× larger`; badge.style.color = '#fbbf24';
+        badge.textContent = `↑ ${ratio.toFixed(1)}× larger`; badge.style.color = '#fbbf24';
       } else {
-        badge.textContent = `↓ ~${(1 / ratio).toFixed(1)}× smaller`; badge.style.color = '#34d399';
+        badge.textContent = `↓ ${(1 / ratio).toFixed(1)}× smaller`; badge.style.color = '#34d399';
       }
     }
   }
@@ -518,8 +518,12 @@
       if (cardOnnx) { cardOnnx.style.opacity = '0.4'; cardOnnx.style.pointerEvents = 'none'; }
       if (cardBoth) { cardBoth.style.opacity = '0.4'; cardBoth.style.pointerEvents = 'none'; }
       // Force Canvas mode
+      const currentProcMode = document.querySelector('input[name="proc-mode"]:checked')?.value;
+      if (currentProcMode && currentProcMode !== 'canvas') {
+        state.wasForcedToCanvasByGif = true;
+      }
       if (procCanvas) { procCanvas.checked = true; }
-      if (cardCanvas) cardCanvas.classList.add('selected');
+      updateProcModeCardsVisuals();
       // Extract frames asynchronously
       state.isAnimatedGif = true;
       extractGifFrames(file).then(result => {
@@ -531,6 +535,13 @@
       if (gifRadio) gifRadio.checked = false;
       if (cardOnnx) { cardOnnx.style.opacity = ''; cardOnnx.style.pointerEvents = ''; }
       if (cardBoth) { cardBoth.style.opacity = ''; cardBoth.style.pointerEvents = ''; }
+      // If we previously forced Canvas mode because of a GIF, let's restore it to ONNX
+      if (state.wasForcedToCanvasByGif) {
+        const onnxRadio = document.getElementById('proc-onnx');
+        if (onnxRadio) onnxRadio.checked = true;
+        state.wasForcedToCanvasByGif = false;
+      }
+      updateProcModeCardsVisuals();
       // Reset to PNG if gif was previously selected
       const currentFmt = document.querySelector('input[name="image-format"]:checked');
       if (!currentFmt || currentFmt.value === 'gif') {
@@ -921,6 +932,47 @@
           applyUnsharpMask(dims.w, dims.h, _isUpscale ? 1.2 : 0.8, 2);
         }
         if (filters.includes('denoise')) { const s = parseInt($('#slider-denoise')?.value || 0) / 100; if (s > 0.1) applyBoxBlur(dims.w, dims.h, Math.round(s * 2)); }
+        // Skin Smoothing — YCbCr skin detection + bilateral blur on skin regions
+        const _skinSmoothVal = parseInt($('#slider-skin')?.value) || 0;
+        if (_skinSmoothVal > 0) {
+          const _skinData = ctx.getImageData(0, 0, dims.w, dims.h);
+          const _sd = _skinData.data;
+          const _sw = dims.w, _sh = dims.h;
+          const _sv = _skinSmoothVal / 100;
+          // Build skin mask using YCbCr
+          const _skinMask = new Float32Array(_sw * _sh);
+          for (let i = 0; i < _sw * _sh; i++) {
+            const idx = i * 4;
+            const r = _sd[idx], g = _sd[idx + 1], b = _sd[idx + 2];
+            const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+            const Cb = 128 + (-0.169 * r - 0.331 * g + 0.500 * b);
+            const Cr = 128 + (0.500 * r - 0.419 * g - 0.081 * b);
+            if (Y > 40 && Y < 230 && Cb >= 77 && Cb <= 127 && Cr >= 133 && Cr <= 173) {
+              _skinMask[i] = 1.0;
+            }
+          }
+          // Smooth mask edges
+          const _smoothedMask = blurChannelInternal(_skinMask, _sw, _sh, 3);
+          const _maskSum = _smoothedMask.reduce((s, v) => s + v, 0);
+          if (_maskSum > 10) {
+            const _blurR = Math.max(2, Math.round(Math.min(_sw, _sh) * 0.015 * (0.5 + _sv * 0.5)));
+            for (let c = 0; c < 3; c++) {
+              const ch = new Float32Array(_sw * _sh);
+              for (let i = 0; i < _sw * _sh; i++) ch[i] = _sd[i * 4 + c];
+              const bl = blurChannelInternal(ch, _sw, _sh, _blurR);
+              for (let i = 0; i < _sw * _sh; i++) {
+                const m = _smoothedMask[i] * _sv;
+                if (m > 0.01) {
+                  // Edge protection: preserve sharp transitions (eyes, lips, brows)
+                  const diff = Math.abs(ch[i] - bl[i]) / 255;
+                  const edgeProt = diff > 0.06 ? Math.max(0, 1 - diff * 5) : 1.0;
+                  _sd[i * 4 + c] = clamp(ch[i] * (1 - m * edgeProt) + bl[i] * m * edgeProt);
+                }
+              }
+            }
+            ctx.putImageData(_skinData, 0, 0);
+          }
+        }
         // Advanced Enhance: Professional-grade multi-pass sharpening + crisp edge retouch
         const advVal = getAdvancedEnhanceVal();
         if (advVal > 0) {
@@ -1206,7 +1258,7 @@
         // Highlight protection: pixels above 215 get reduced boost
         const brightProtect = lum[i] > 215 ? Math.max(0, (255 - lum[i]) / 40) : 1.0;
         const delta = edge * microStr * brightProtect;
-        data[i * 4]     = clamp(data[i * 4]     + delta);
+        data[i * 4] = clamp(data[i * 4] + delta);
         data[i * 4 + 1] = clamp(data[i * 4 + 1] + delta);
         data[i * 4 + 2] = clamp(data[i * 4 + 2] + delta);
       }
@@ -1380,6 +1432,178 @@
       }
     }
     ctx.putImageData(imageData, 0, 0);
+  }
+
+  // ===== FACE-AWARE ONNX POST-PROCESSING ===== //
+  // Real-ESRGAN over-smooths human faces — eyes become waxy, skin looks plastic.
+  // This function restores natural face detail AFTER ONNX inference by:
+  //   1. Detecting face/skin regions via YCbCr skin mask
+  //   2. Within face regions, finding HIGH-DETAIL features (eyes, brows, lips)
+  //      using local variance — these get targeted sharpening
+  //   3. For skin areas, blending back subtle original texture to prevent plastic look
+  //   4. Applying eye-specific Laplacian recovery for crisp iris/pupil detail
+  //
+  // Parameters:
+  //   onnxCanvas   — the ONNX output canvas (4x upscaled)
+  //   origCanvas   — the original input canvas (pre-ONNX, at input resolution)
+  //   The function upscales origCanvas internally for reference texture extraction.
+  function applyFaceAwareONNXRestore(onnxCanvas, origCanvas) {
+    const onnxCtx = onnxCanvas.getContext('2d', { willReadFrequently: true });
+    const onnxW = onnxCanvas.width, onnxH = onnxCanvas.height;
+    const onnxImgData = onnxCtx.getImageData(0, 0, onnxW, onnxH);
+    const onnxData = onnxImgData.data;
+    const pixelCount = onnxW * onnxH;
+
+    // Step 1: Build skin mask on ONNX output
+    const skinMask = buildSkinMask(onnxImgData, onnxW, onnxH);
+    const skinSum = skinMask.reduce((s, v) => s + v, 0);
+    if (skinSum < 50) {
+      console.log('[FaceRestore] No significant face/skin detected — skipping');
+      return; // No face detected, skip entirely
+    }
+    console.log('[FaceRestore] Skin pixels detected:', Math.round(skinSum), '/', pixelCount,
+      '(' + (skinSum / pixelCount * 100).toFixed(1) + '%)');
+
+    // Step 2: Build face detail mask — identifies eyes, brows, lips (high local variance within skin)
+    const detailMask = buildFaceDetailMask(onnxData, skinMask, onnxW, onnxH);
+
+    // Step 3: Create upscaled reference from original for texture blending
+    // We upscale the original to match ONNX output size using bicubic (browser 'high' quality)
+    const refCanvas = document.createElement('canvas');
+    refCanvas.width = onnxW;
+    refCanvas.height = onnxH;
+    const refCtx = refCanvas.getContext('2d', { willReadFrequently: true });
+    refCtx.imageSmoothingEnabled = true;
+    refCtx.imageSmoothingQuality = 'high';
+    refCtx.drawImage(origCanvas, 0, 0, onnxW, onnxH);
+    const refData = refCtx.getImageData(0, 0, onnxW, onnxH).data;
+
+    // Step 4: Extract high-frequency detail from the reference (original - blurred original)
+    // This captures skin texture, pores, fine hair that ONNX removed
+    const blurR = Math.max(2, Math.round(Math.min(onnxW, onnxH) * 0.006));
+    const refLum = new Float32Array(pixelCount);
+    for (let i = 0; i < pixelCount; i++) {
+      refLum[i] = 0.299 * refData[i * 4] + 0.587 * refData[i * 4 + 1] + 0.114 * refData[i * 4 + 2];
+    }
+    const refBlurred = blurChannelInternal(refLum, onnxW, onnxH, blurR);
+    const refDetail = new Float32Array(pixelCount);
+    for (let i = 0; i < pixelCount; i++) {
+      refDetail[i] = refLum[i] - refBlurred[i]; // high-frequency texture signal
+    }
+
+    // Step 5: Apply corrections
+    // A) Eye/detail regions: GENTLE structure-preserving unsharp (NOT aggressive Laplacian)
+    //    Previous eyeSharpStr=1.8 Laplacian was WAY too strong — it distorted eye pupils,
+    //    changed iris direction, and created bright white halo lines on body edges.
+    //    New approach: much lower strength + edge magnitude cap so large structural edges
+    //    (eye shape, pupil outline) are PRESERVED while only fine detail gets enhanced.
+    // B) Skin regions: blend back original texture at very low strength
+    const src = new Uint8ClampedArray(onnxData); // read-only copy for Laplacian
+
+    // Eye detail sharpening — REDUCED from 1.8 to 0.5 to prevent eye distortion and white halos
+    const eyeSharpStr = 0.5;
+    // Skin texture blend — REDUCED from 0.25 to 0.12 to prevent bright edge lines on body
+    const skinTextureStr = 0.12;
+    // Maximum edge magnitude to sharpen — edges larger than this define structure (eye shape,
+    // pupil vs iris boundary) and MUST NOT be amplified or they change apparent eye direction.
+    // Only small edges (fine texture detail) get sharpened.
+    const maxEdgeMagnitude = 25;
+
+    for (let y = 1; y < onnxH - 1; y++) {
+      for (let x = 1; x < onnxW - 1; x++) {
+        const pi = y * onnxW + x;
+        const skinW = skinMask[pi];
+        if (skinW < 0.05) continue; // Not in face region
+
+        const idx = pi * 4;
+        const detailW = detailMask[pi]; // 0 = smooth skin, 1 = eye/detail feature
+
+        if (detailW > 0.5) {
+          // HIGH-DETAIL face feature (eyes, brows, lips, nostrils)
+          // Threshold raised from 0.3→0.5 to avoid over-sharpening skin transition areas
+          const top = ((y - 1) * onnxW + x) * 4;
+          const bot = ((y + 1) * onnxW + x) * 4;
+          const lft = (y * onnxW + (x - 1)) * 4;
+          const rgt = (y * onnxW + (x + 1)) * 4;
+          const str = eyeSharpStr * detailW * skinW;
+          for (let c = 0; c < 3; c++) {
+            const edge = src[idx + c] * 4 - src[top + c] - src[bot + c] - src[lft + c] - src[rgt + c];
+            // EDGE MAGNITUDE CAP: large edges define eye/pupil STRUCTURE.
+            // Amplifying them changes apparent eye direction → only sharpen small detail edges.
+            const absEdge = Math.abs(edge);
+            if (absEdge > maxEdgeMagnitude) continue; // Skip — preserve structure
+            // Bright pixel protection: kicks in earlier (180 vs old 220) to prevent white halos
+            const brightProtect = src[idx + c] > 180 ? Math.max(0, (255 - src[idx + c]) / 75) : 1.0;
+            onnxData[idx + c] = clamp(src[idx + c] + edge * str * brightProtect);
+          }
+        } else {
+          // SMOOTH SKIN — blend back original texture to prevent plastic look
+          // Only the high-frequency component (detail), not low-frequency (tone/color)
+          // Reduced from 0.25 to 0.12 to prevent bright edge lines along body contours
+          const texDelta = refDetail[pi] * skinTextureStr * skinW * (1.0 - detailW);
+          // Additional cap: don't add texture that would push pixels above 240 (prevents white lines)
+          const maxDelta = Math.min(Math.abs(texDelta), Math.max(0, 240 - onnxData[idx]) * 0.5);
+          const signedDelta = texDelta >= 0 ? maxDelta : -maxDelta;
+          onnxData[idx] = clamp(onnxData[idx] + signedDelta);
+          onnxData[idx + 1] = clamp(onnxData[idx + 1] + signedDelta);
+          onnxData[idx + 2] = clamp(onnxData[idx + 2] + signedDelta);
+        }
+      }
+    }
+
+    onnxCtx.putImageData(onnxImgData, 0, 0);
+    console.log('[FaceRestore] Face-aware ONNX restoration applied successfully');
+  }
+
+  // Builds a detail mask within face regions — 1.0 = high detail (eyes, brows, lips)
+  // 0.0 = smooth skin. Uses local variance of luminance within a small window.
+  // Eyes have VERY high local variance (dark pupil + white sclera + colored iris)
+  // Smooth skin has LOW local variance (uniform tone)
+  function buildFaceDetailMask(data, skinMask, w, h) {
+    const mask = new Float32Array(w * h);
+    // Compute luminance
+    const lum = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      lum[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+    }
+
+    // Local variance in a 5x5 window — fast O(1) approximate via separable sums
+    const r = 2; // 5x5 window
+    for (let y = r; y < h - r; y++) {
+      for (let x = r; x < w - r; x++) {
+        const pi = y * w + x;
+        if (skinMask[pi] < 0.1) continue; // Only compute within face regions
+
+        let sum = 0, sumSq = 0, count = 0;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            const ni = (y + dy) * w + (x + dx);
+            const v = lum[ni];
+            sum += v;
+            sumSq += v * v;
+            count++;
+          }
+        }
+        const mean = sum / count;
+        const variance = (sumSq / count) - (mean * mean);
+
+        // Map variance to detail weight:
+        // variance < 30  → smooth skin (0.0)
+        // variance 30-200 → transition zone  
+        // variance > 200  → definite detail feature (1.0) — eyes, brows, sharp edges
+        if (variance < 30) {
+          mask[pi] = 0;
+        } else if (variance > 200) {
+          mask[pi] = 1.0;
+        } else {
+          mask[pi] = (variance - 30) / 170;
+        }
+      }
+    }
+
+    // Slight blur on the detail mask for smooth transitions
+    const smoothed = blurChannelInternal(mask, w, h, 1);
+    return smoothed;
   }
 
   // ===== RUN PROCESSING ===== //
@@ -1593,7 +1817,7 @@
       // Intelligent Optimize — clean sharpening + mild color boost, zero blur
       case 'auto':
         setFilter('sharpen', true); setFilter('color', true); setFilter('contrast', true); setFilter('brightness', true);
-        setSlider('slider-sharpness', 30, 'sharpness-val');
+        setSlider('slider-sharpness', 4, 'sharpness-val');
         setSlider('slider-saturation', 15, 'saturation-val');
         setSlider('slider-brightness', 3, 'brightness-val');
         setSlider('slider-contrast', 8, 'contrast-val');
@@ -1606,7 +1830,7 @@
         setSlider('slider-saturation', 18, 'saturation-val');
         setSlider('slider-brightness', -8, 'brightness-val');
         setSlider('slider-contrast', 28, 'contrast-val');
-        setSlider('slider-sharpness', 20, 'sharpness-val');
+        setSlider('slider-sharpness', 5, 'sharpness-val');
         setTimeout(() => {
           if (curvesState && curvesState.points) {
             curvesState.points.rgb = [{ x: 0, y: 0.04 }, { x: 0.25, y: 0.22 }, { x: 0.5, y: 0.5 }, { x: 0.75, y: 0.78 }, { x: 1, y: 0.96 }];
@@ -1626,7 +1850,7 @@
         setSlider('slider-clear-face', 15, 'clear-face-val');
         setSlider('slider-saturation', 10, 'saturation-val');
         setSlider('slider-brightness', 8, 'brightness-val');
-        setSlider('slider-sharpness', 15, 'sharpness-val');
+        setSlider('slider-sharpness', 3, 'sharpness-val');
         $('#fab-preset-portrait')?.classList.add('active');
         break;
     }
@@ -1667,14 +1891,15 @@
     target.style.transform = 'scale(1)';
     target.style.imageRendering = (getUpscaleMultiplier() > 0) ? 'high-quality' : 'auto';
 
-    // Canvas pixel ops — Sharpness, Denoise, and Advanced Options need real pixel processing
+    // Canvas pixel ops — Sharpness, Denoise, Skin Smoothing, and Advanced Options need real pixel processing
     const sharpVal = parseInt($('#slider-sharpness')?.value || 0);
     const denoiseVal = parseInt($('#slider-denoise')?.value || 0);
     const skinSVal = parseInt($('#slider-skin-sharpen')?.value) || 0;
     const clearFaceVal = parseInt($('#slider-clear-face')?.value) || 0;
+    const skinSmoothVal = parseInt($('#slider-skin')?.value) || 0;
     const advVal = getAdvancedEnhanceVal();
 
-    const needsCanvas = (sharpVal > 0 || denoiseVal > 0 || skinSVal > 0 || clearFaceVal > 0 || advVal > 0)
+    const needsCanvas = (sharpVal > 0 || denoiseVal > 0 || skinSVal > 0 || clearFaceVal > 0 || skinSmoothVal > 0 || advVal > 0)
       && state.originalDataUrl;
 
     if (!needsCanvas) {
@@ -1694,9 +1919,10 @@
       const denoiseValNow = parseInt($('#slider-denoise')?.value || 0);
       const skinSValNow = parseInt($('#slider-skin-sharpen')?.value) || 0;
       const clearFaceValNow = parseInt($('#slider-clear-face')?.value) || 0;
+      const skinSmoothValNow = parseInt($('#slider-skin')?.value) || 0;
       const advValNow = getAdvancedEnhanceVal();
       // Re-check — slider may have hit 0 during the debounce wait
-      if (sharpValNow === 0 && denoiseValNow === 0 && skinSValNow === 0 && clearFaceValNow === 0 && advValNow === 0) {
+      if (sharpValNow === 0 && denoiseValNow === 0 && skinSValNow === 0 && clearFaceValNow === 0 && skinSmoothValNow === 0 && advValNow === 0) {
         if (previewImage && previewImage._advPreviewActive) { previewImage.src = state.originalDataUrl; previewImage._advPreviewActive = false; }
         const ov = document.getElementById('adv-preview-overlay'); if (ov) ov.style.display = 'none';
         return;
@@ -1728,14 +1954,16 @@
           }
         }
 
-        // DENOISE — box blur, scales cleanly from 0% (nothing) to 100% (strong)
+        // DENOISE — blend between original and blurred, using slider % as blend amount
+        // This ensures 1% = barely perceptible softening, 100% = full blur
         if (denoiseValNow > 0) {
           const blurR = Math.max(1, Math.round((denoiseValNow / 100) * 4));
+          const blendAmt = denoiseValNow / 100; // 1% = 0.01 blend, 100% = 1.0 full blur
           for (let c = 0; c < 3; c++) {
             const ch = new Float32Array(pw * ph);
             for (let i = 0; i < pw * ph; i++) ch[i] = d[i * 4 + c];
             const bl = blurChannelInternal(ch, pw, ph, blurR);
-            for (let i = 0; i < pw * ph; i++) d[i * 4 + c] = clamp(bl[i]);
+            for (let i = 0; i < pw * ph; i++) d[i * 4 + c] = clamp(ch[i] * (1 - blendAmt) + bl[i] * blendAmt);
           }
         }
 
@@ -1778,6 +2006,42 @@
                 const orig = ch[i];
                 const edgeProt = Math.abs(orig - bl[i]) / 255 > 0.08 ? Math.max(0, 1 - (Math.abs(orig - bl[i]) / 255) * 4) : 1.0;
                 d[i * 4 + c] = clamp(orig + (bl[i] - orig) * smoothAmt * edgeProt * mask[i]);
+              }
+            }
+          }
+        }
+
+        // SKIN SMOOTHING — YCbCr skin detection + bilateral blur on skin regions only
+        if (skinSmoothValNow > 0) {
+          const skinMask = new Float32Array(pw * ph);
+          for (let i = 0; i < pw * ph; i++) {
+            const idx = i * 4;
+            const r = d[idx], g = d[idx + 1], b = d[idx + 2];
+            const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+            const Cb = 128 + (-0.169 * r - 0.331 * g + 0.500 * b);
+            const Cr = 128 + (0.500 * r - 0.419 * g - 0.081 * b);
+            if (Y > 40 && Y < 230 && Cb >= 77 && Cb <= 127 && Cr >= 133 && Cr <= 173) {
+              skinMask[i] = 1.0;
+            }
+          }
+          // Smooth the mask to avoid hard edges
+          const smoothedSkinMask = blurChannelInternal(skinMask, pw, ph, 3);
+          const skinMaskSum = smoothedSkinMask.reduce((s, v) => s + v, 0);
+          if (skinMaskSum > 10) {
+            const sv = skinSmoothValNow / 100;
+            const blurR = Math.max(2, Math.round(Math.min(pw, ph) * 0.015 * (0.5 + sv * 0.5)));
+            for (let c = 0; c < 3; c++) {
+              const ch = new Float32Array(pw * ph);
+              for (let i = 0; i < pw * ph; i++) ch[i] = d[i * 4 + c];
+              const bl = blurChannelInternal(ch, pw, ph, blurR);
+              for (let i = 0; i < pw * ph; i++) {
+                const m = smoothedSkinMask[i] * sv;
+                if (m > 0.01) {
+                  // Edge protection: preserve sharp transitions (eyes, lips, brows)
+                  const diff = Math.abs(ch[i] - bl[i]) / 255;
+                  const edgeProt = diff > 0.06 ? Math.max(0, 1 - diff * 5) : 1.0;
+                  d[i * 4 + c] = clamp(ch[i] * (1 - m * edgeProt) + bl[i] * m * edgeProt);
+                }
               }
             }
           }
@@ -1908,7 +2172,7 @@
     }
   }, { passive: true });
   if (fileInput) { fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); }); }
-  safeBind('#btn-change-file', 'click', () => { showStep('upload'); if (fileInput) fileInput.value = ''; });
+  safeBind('#btn-change-file', 'click', () => { if (fileInput) fileInput.click(); });
 
   // Fullscreen
   const fullscreenOverlay = $('#fullscreen-overlay'), fullscreenImage = $('#fullscreen-image');
@@ -2091,35 +2355,34 @@
   if (advToggle) { advToggle.addEventListener('click', () => { advWrapper.classList.toggle('open'); if (advWrapper.classList.contains('open')) { advContent.style.display = 'block'; advContent.animate([{ opacity: 0, transform: 'translateY(-10px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 300, easing: 'ease-out', fill: 'both' }); drawCurve(true); } else { advContent.style.display = 'none'; } }); }
 
   // ── Processing Mode Card Selector ──
-  function initProcModeCards() {
+  function updateProcModeCardsVisuals() {
     const cards = document.querySelectorAll('.proc-mode-card');
-    const radios = document.querySelectorAll('input[name="proc-mode"]');
     const autoNote = document.getElementById('proc-mode-auto-note');
     if (!cards.length) return;
+    const checked = document.querySelector('input[name="proc-mode"]:checked')?.value || 'auto';
+    cards.forEach(card => {
+      const radio = card.querySelector('input[type=radio]');
+      card.classList.toggle('selected', radio?.value === checked);
+    });
+    if (autoNote) autoNote.style.display = (checked === 'auto' || !checked) ? 'block' : 'none';
+  }
 
-    function updateCards() {
-      const checked = document.querySelector('input[name="proc-mode"]:checked')?.value || 'auto';
-      cards.forEach(card => {
-        const radio = card.querySelector('input[type=radio]');
-        card.classList.toggle('selected', radio?.value === checked);
-      });
-      if (autoNote) autoNote.style.display = (checked === 'auto' || !checked) ? 'block' : 'none';
-    }
+  function initProcModeCards() {
+    const cards = document.querySelectorAll('.proc-mode-card');
+    if (!cards.length) return;
 
     cards.forEach(card => {
       card.addEventListener('click', () => {
         const radio = card.querySelector('input[type=radio]');
         if (radio) {
           radio.checked = true;
-          updateCards();
+          updateProcModeCardsVisuals();
           updateSizeEstimation();
         }
       });
     });
 
-    // Set default: auto (no radio pre-checked = auto detection)
-    // We add an "auto" option programmatically so user can revert
-    updateCards();
+    updateProcModeCardsVisuals();
   }
   initProcModeCards();
 
@@ -2416,7 +2679,7 @@
           const url = parts[i];
           console.log(`[ONNX] Fetching split part ${i + 1}/${parts.length}:`, url);
           if (dlText) dlText.textContent = `Downloading AI brain… (part ${i + 1}/${parts.length})`;
-          
+
           const response = await fetch(url);
           if (!response.ok) {
             throw new Error(`HTTP ${response.status} ${response.statusText} on ${url}`);
@@ -2741,6 +3004,7 @@
               nxtX.drawImage(curC, 0, 0, nw, nh);
               curC = nxtC; cw = nw; ch = nh;
               await yieldToBrowser();
+              if (aiState.cancelRequested) throw new Error('Processing cancelled by user.');
             }
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(curC, 0, 0, tw, th);
@@ -2761,6 +3025,7 @@
               nxtX.drawImage(curC, 0, 0, nw, nh);
               curC = nxtC; cw = nw; ch = nh;
               await yieldToBrowser();
+              if (aiState.cancelRequested) throw new Error('Processing cancelled by user.');
             }
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(curC, 0, 0, tw, th);
@@ -2872,6 +3137,7 @@
                   }
                 }
                 await yieldToBrowser();
+                if (aiState.cancelRequested) throw new Error('Processing cancelled by user.');
                 if (setProgressFn) setProgressFn(55 + Math.round((yStart / th) * 30));
               }
               ctx.putImageData(texData, 0, 0);
@@ -3110,7 +3376,7 @@
     const displayMaxW = 1280;
     displayCanvas.width = displayMaxW;
     displayCanvas.height = Math.round(displayMaxW * (inputCanvas.height / inputCanvas.width));
-    displayCanvas.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;border-radius:8px;';
+    displayCanvas.style.cssText = 'max-width:100%;max-height:48vh;width:auto;height:auto;display:block;border-radius:8px;';
 
     // FIX Problem 1: Show the MODIFIED image (with user's brightness/contrast/colour settings)
     // as the background preview — NOT the clean original. This matches Canvas pipeline behaviour.
@@ -3252,9 +3518,25 @@
       }
     }
 
-    if (statusEl) statusEl.textContent = 'Applying enhancements…';
-
     const yieldToBrowser = () => new Promise(r => setTimeout(r, 0));
+
+    // ── FACE-AWARE ONNX RESTORATION ──
+    // Real-ESRGAN over-smooths human faces — eyes become waxy, skin looks plastic.
+    // This pass automatically detects face regions and:
+    //   • Sharpens eye/brow/lip detail that ONNX destroyed
+    //   • Blends back subtle original skin texture to prevent the "over-polished" look
+    // Uses the original input canvas as reference for natural texture.
+    if (statusEl) statusEl.textContent = 'Restoring face detail…';
+    await yieldToBrowser();
+    try {
+      const origSourceForFace = inputCanvas._enhancedForONNX || inputCanvas;
+      applyFaceAwareONNXRestore(outputCanvas, origSourceForFace);
+    } catch (faceErr) {
+      console.warn('[ONNX Image] Face restoration skipped:', faceErr.message);
+    }
+    await yieldToBrowser();
+
+    if (statusEl) statusEl.textContent = 'Applying enhancements…';
 
     // Use a dedicated offscreen canvas — NOT the global ctx/canvas which is the
     // live display element. Using global canvas caused corrupt/red output because
@@ -3313,9 +3595,43 @@
       for (let y = 0; y < onnxH; y++) for (let x = 0; x < onnxW; x++) { const idx = (y * onnxW + x) * 4; const d = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxD; const v = 1 - d * d * 0.7; dataOnnx[idx] *= v; dataOnnx[idx + 1] *= v; dataOnnx[idx + 2] *= v; }
     }
 
-    // Skin Smoothing — fires when slider > 0, no checkbox needed
+    // Skin Smoothing — detects skin via YCbCr and applies targeted blur to skin regions
     const skinSmoothVal = parseInt($('#slider-skin')?.value) || 0;
-    if (skinSmoothVal > 0) { const sv = skinSmoothVal / 100; for (let i = 0; i < dataOnnx.length; i += 4) { const g = 0.299 * dataOnnx[i] + 0.587 * dataOnnx[i + 1] + 0.114 * dataOnnx[i + 2], lift = sv * 8; dataOnnx[i] = clamp(g + (1 + sv * 0.1) * (dataOnnx[i] - g) + lift); dataOnnx[i + 1] = clamp(g + (1 + sv * 0.1) * (dataOnnx[i + 1] - g) + lift); dataOnnx[i + 2] = clamp(g + (1 + sv * 0.1) * (dataOnnx[i + 2] - g) + lift); } }
+    if (skinSmoothVal > 0) {
+      if (statusEl) statusEl.textContent = 'Applying skin smoothing…';
+      await yieldToBrowser();
+      const sv = skinSmoothVal / 100;
+      // Build skin mask
+      const skinMask = new Float32Array(onnxW * onnxH);
+      for (let i = 0; i < onnxW * onnxH; i++) {
+        const idx = i * 4;
+        const r = dataOnnx[idx], g = dataOnnx[idx + 1], b = dataOnnx[idx + 2];
+        const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+        const Cb = 128 + (-0.169 * r - 0.331 * g + 0.500 * b);
+        const Cr = 128 + (0.500 * r - 0.419 * g - 0.081 * b);
+        if (Y > 40 && Y < 230 && Cb >= 77 && Cb <= 127 && Cr >= 133 && Cr <= 173) {
+          skinMask[i] = 1.0;
+        }
+      }
+      // Smooth the mask to avoid hard edges
+      const smoothedMask = blurChannelInternal(skinMask, onnxW, onnxH, 3);
+      const maskSum = smoothedMask.reduce((s, v) => s + v, 0);
+      if (maskSum > 10) {
+        // Apply per-channel blur only to skin pixels, blending by mask strength and slider amount
+        const blurR = Math.max(2, Math.round(Math.min(onnxW, onnxH) * 0.012 * (0.5 + sv * 0.5)));
+        for (let c = 0; c < 3; c++) {
+          const ch = new Float32Array(onnxW * onnxH);
+          for (let i = 0; i < onnxW * onnxH; i++) ch[i] = dataOnnx[i * 4 + c];
+          const bl = blurChannelInternal(ch, onnxW, onnxH, blurR);
+          for (let i = 0; i < onnxW * onnxH; i++) {
+            const m = smoothedMask[i] * sv;
+            if (m > 0.01) {
+              dataOnnx[i * 4 + c] = clamp(ch[i] * (1 - m) + bl[i] * m);
+            }
+          }
+        }
+      }
+    }
     // Texture Smoothing — fires when slider > 0, no checkbox needed
     const textureSmoothVal = parseInt($('#slider-texture')?.value) || 0;
     if (textureSmoothVal > 0) { const sv = textureSmoothVal / 100; for (let i = 0; i < dataOnnx.length; i += 4) { const g = 0.299 * dataOnnx[i] + 0.587 * dataOnnx[i + 1] + 0.114 * dataOnnx[i + 2]; dataOnnx[i] = clamp(dataOnnx[i] * (1 - sv * 0.3) + g * sv * 0.3); dataOnnx[i + 1] = clamp(dataOnnx[i + 1] * (1 - sv * 0.3) + g * sv * 0.3); dataOnnx[i + 2] = clamp(dataOnnx[i + 2] * (1 - sv * 0.3) + g * sv * 0.3); } }
@@ -4520,12 +4836,38 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       await sleep(50);
       setProgress(0);
 
+      // ── Clear any stale canvas content from a previous run ──
+      state.processedDataUrl = null;
+      state.processedImagePreviewUrl = null;
+      if (canvas) { canvas.width = canvas.width; } // reset canvas buffer
       const canvasWrap = document.getElementById('processing-canvas-wrapper');
       if (canvasWrap) {
+        canvasWrap.innerHTML = '<canvas id="processing-canvas"></canvas>';
         canvasWrap.style.display = 'block';
         canvasWrap.style.maxWidth = '100%';
         canvasWrap.style.borderRadius = '12px';
         canvasWrap.style.overflow = 'hidden';
+
+        // ── Pre-size canvas to image aspect ratio so container isn't empty during model load ──
+        const _initCanvas = canvasWrap.querySelector('canvas');
+        if (_initCanvas && state.originalWidth && state.originalHeight) {
+          const _maxW = Math.min(720, window.innerWidth * 0.9);
+          const _maxH = window.innerHeight * 0.48;
+          const _scale = Math.min(_maxW / state.originalWidth, _maxH / state.originalHeight);
+          _initCanvas.width = Math.round(state.originalWidth * _scale);
+          _initCanvas.height = Math.round(state.originalHeight * _scale);
+          // Draw original image as dimmed placeholder while model loads
+          if (state.originalDataUrl) {
+            const _plImg = new Image();
+            _plImg.onload = () => {
+              const _pCtx = _initCanvas.getContext('2d');
+              _pCtx.drawImage(_plImg, 0, 0, _initCanvas.width, _initCanvas.height);
+              _pCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+              _pCtx.fillRect(0, 0, _initCanvas.width, _initCanvas.height);
+            };
+            _plImg.src = state.originalDataUrl;
+          }
+        }
       }
 
       // ── Route: Image vs Video ──
@@ -4627,6 +4969,10 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
             }
           }
         } catch (err) {
+          // If cancelled by user, re-throw so the outer catch handles it cleanly
+          if (err.message && err.message.includes('cancelled by user')) {
+            throw err;
+          }
           console.error('[Pipeline] Error, falling back to canvas:', err);
           await processImageHQDownscale(setProgress, tgt);
         }
@@ -4645,8 +4991,18 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       showResults();
     } catch (err) {
       console.error('[AI Processing] Error:', err);
-      // If cancelled by user, do nothing — the cancel button handler redirects to configure
+      // If cancelled by user, go back to configure step cleanly — no results shown
       if (err.message && err.message.includes('cancelled by user')) {
+        aiState.cancelRequested = false;
+        aiState.processing = false;
+        // ── Purge all stale processing state so re-run starts clean ──
+        state.processedDataUrl = null;
+        state.processedImagePreviewUrl = null;
+        const _cw = document.getElementById('processing-canvas-wrapper');
+        if (_cw) _cw.innerHTML = '<canvas id="processing-canvas"></canvas>';
+        const _pc = document.getElementById('processing-canvas');
+        if (_pc) { _pc.width = _pc.width; } // clear canvas buffer
+        showStep('configure');
         return;
       }
       const statusEl = document.getElementById('processing-status');
@@ -4689,16 +5045,21 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
   const aiCancelBtn = document.getElementById('btn-process-cancel');
   if (aiCancelBtn) {
     aiCancelBtn.addEventListener('click', function () {
-      // Set both flags so both canvas and ONNX pipelines stop at next check
+      // Set flag so both canvas and ONNX pipelines throw at next check point.
+      // The pipeline's outer catch block handles returning to configure step.
+      // Do NOT use setTimeout to force showStep — let the pipeline catch handle it
+      // to avoid race conditions where showResults() fires after the timeout.
       aiState.cancelRequested = true;
       aiState.paused = false;
-      aiState.processing = false;
       console.log('[AI] Cancel requested by user');
-      // Give the pipelines a moment to detect the flag, then force back to configure
-      setTimeout(() => {
-        aiState.cancelRequested = false;
-        showStep('configure');
-      }, 400);
+
+      // ── Immediately clear the visible canvas so old image vanishes on cancel ──
+      const _cancelCanvas = document.getElementById('processing-canvas');
+      if (_cancelCanvas) { _cancelCanvas.width = _cancelCanvas.width; }
+      const _cancelWrap = document.getElementById('processing-canvas-wrapper');
+      if (_cancelWrap) _cancelWrap.innerHTML = '<canvas id="processing-canvas"></canvas>';
+      state.processedDataUrl = null;
+      state.processedImagePreviewUrl = null;
     });
   }
 
@@ -5086,7 +5447,7 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
       try {
         const finalResult = await compressImage(bestQ, format, rW, rH);
         let finalBlob = finalResult.blob;
-        
+
         if (finalBlob.size <= targetBytes) {
           state.compressorTargetBytes = targetBytes;
           finalBlob = padBlobToSize(finalBlob, targetBytes);

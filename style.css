@@ -2107,15 +2107,26 @@ body.mode-app #features-section {
 /* ===== RESPONSIVE VIDEO PREVIEW ===== */
 .processing-preview-container {
   position: relative;
-  width: 100%;
+  width: fit-content;
   max-width: min(90vw, 720px);
+  max-height: 48vh;
   min-height: 200px;
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   background: #000;
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.processing-canvas-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .rec-badge {
@@ -2153,12 +2164,13 @@ body.mode-app #features-section {
   100% { opacity: 1; transform: scale(1); }
 }
 
+/* object-fit:contain does NOT work on canvas elements — use max constraints instead */
 #processing-canvas {
-  width: 100%;
+  max-width: 100%;
+  max-height: 48vh;
+  width: auto;
   height: auto;
   display: block;
-  max-height: 50vh;
-  object-fit: contain;
 }
 
 .linear-progress-wrapper {
@@ -4110,4 +4122,61 @@ body[data-current-step="result"] .about-section {
 
 .toggle-switch input:focus + .toggle-slider {
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+}
+
+/* ===== FAQ SECTION ===== */
+.faq-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0;
+  margin-bottom: 0.75rem;
+  transition: all var(--transition);
+}
+
+.faq-item:hover {
+  border-color: var(--border-hover);
+}
+
+.faq-item[open] {
+  border-color: rgba(108, 92, 231, 0.3);
+  background: var(--bg-card-hover);
+}
+
+.faq-item summary {
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  transition: color var(--transition);
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary::after {
+  content: '+';
+  font-size: 1.3rem;
+  font-weight: 300;
+  color: var(--accent-2);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  margin-left: 1rem;
+}
+
+.faq-item[open] summary::after {
+  content: '−';
+  transform: rotate(180deg);
+}
+
+.faq-item p {
+  padding: 0 1.25rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
 }
