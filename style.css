@@ -2653,7 +2653,7 @@ body.mode-app #features-section {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 #splash-screen.fade-out {
@@ -2746,14 +2746,14 @@ body.mode-app #features-section {
   background: var(--gradient-main);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: fadeUp 0.8s ease-out 0.3s both;
+  animation: fadeUp 0.5s ease-out 0.1s both;
 }
 
 .splash-tagline {
   color: var(--text-muted);
   font-size: 0.95rem;
   margin-top: 0.25rem;
-  animation: fadeUp 0.8s ease-out 0.5s both;
+  animation: fadeUp 0.5s ease-out 0.15s both;
 }
 
 .splash-loader {
@@ -2763,7 +2763,7 @@ body.mode-app #features-section {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 2px;
   overflow: hidden;
-  animation: fadeUp 0.8s ease-out 0.7s both;
+  animation: fadeUp 0.4s ease-out 0.2s both;
 }
 
 .splash-loader-bar {
@@ -2771,7 +2771,7 @@ body.mode-app #features-section {
   width: 0%;
   border-radius: 2px;
   background: var(--gradient-main);
-  animation: splashLoad 2s ease-in-out forwards 0.8s;
+  animation: splashLoad 0.9s ease-in-out forwards 0.2s;
 }
 
 @keyframes splashLoad {
@@ -3556,7 +3556,7 @@ body.mode-app #features-section {
   width: 64px;
   height: 64px;
   object-fit: contain;
-  animation: splashLogoPulse 2s ease-in-out infinite;
+  animation: splashLogoPulse 1.2s ease-in-out infinite;
 }
 
 @keyframes splashLogoPulse {

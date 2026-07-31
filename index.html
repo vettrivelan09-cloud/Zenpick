@@ -254,8 +254,12 @@
       padding-bottom: 2rem !important;
     }
   </style>
-  <!-- ONNX Runtime Web for Real-ESRGAN AI Upscaling (runs on user's GPU/CPU) -->
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js" defer></script>
+  <script defer>
+    if (window.ort && window.ort.env) {
+      window.ort.env.wasm.wasmBinaryCache = false;
+    }
+  </script>
   <!-- gifenc: lightweight GIF encoder for animated GIF output -->
   <script>
     // Provide a CommonJS-like exports shim so gifenc.js can self-register
@@ -268,6 +272,7 @@
     // After gifenc.js loads, expose its functions as window.gifenc
     window.gifenc = window.__gifencExports;
   </script>
+  <script src="faceMask.js?v=1785141474929"></script>
 </head>
 
 <body>
@@ -371,7 +376,8 @@
         <span class="tagline-divider">·</span>
         <span class="tagline-badge">✓ 100% Free</span>
       </div>
-      <p class="hero-sub">Upscale, enhance, edit, and compress your photos &amp; images to stunning <strong>8K, 4K, 1080p</strong>
+      <p class="hero-sub">Upscale, enhance, edit, and compress your photos &amp; images to stunning <strong>8K, 4K,
+          1080p</strong>
         quality — completely free, unlimited, and private directly in your browser.</p>
       <div class="hero-actions">
         <button id="hero-upload-btn" class="btn btn-primary btn-lg hero-cta-btn">
@@ -755,9 +761,10 @@
                 <div class="quality-option compressor-nav-card" id="compressor-nav-btn">
                   <div class="quality-card compressor-card">
                     <span class="quality-res compressor-icon-res">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="16 18 22 12 16 6"/>
-                        <polyline points="8 6 2 12 8 18"/>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 18 22 12 16 6" />
+                        <polyline points="8 6 2 12 8 18" />
                       </svg>
                     </span>
                     <span class="quality-px">Reduce file size</span>
@@ -1465,10 +1472,12 @@
           <div class="settings-panel compressor-panel" id="compressor-panel" style="display: none;">
             <!-- Back to Enhancer button -->
             <div style="margin-bottom: 1rem;">
-              <button id="compressor-back-btn" class="btn btn-ghost btn-sm" style="display: flex; align-items: center; gap: 6px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="19" y1="12" x2="5" y2="12"/>
-                  <polyline points="12 19 5 12 12 5"/>
+              <button id="compressor-back-btn" class="btn btn-ghost btn-sm"
+                style="display: flex; align-items: center; gap: 6px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
                 </svg>
                 Back to Enhancer
               </button>
@@ -1479,8 +1488,10 @@
               <!-- Quality Slider -->
               <div class="compressor-section">
                 <h3>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                   </svg>
                   Quality
                 </h3>
@@ -1488,7 +1499,8 @@
                 <div class="compressor-quality-control">
                   <div class="compressor-slider-row">
                     <span class="compressor-slider-min">1%</span>
-                    <input type="range" id="compressor-quality-slider" min="1" max="100" value="80" class="range-slider compressor-range" />
+                    <input type="range" id="compressor-quality-slider" min="1" max="100" value="80"
+                      class="range-slider compressor-range" />
                     <span class="compressor-slider-max">100%</span>
                     <span id="compressor-quality-val" class="compressor-quality-val">80%</span>
                   </div>
@@ -1498,21 +1510,25 @@
               <!-- Target File Size -->
               <div class="compressor-section">
                 <h3>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
-                    <circle cx="12" cy="12" r="10"/>
-                    <circle cx="12" cy="12" r="6"/>
-                    <circle cx="12" cy="12" r="2"/>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="6" />
+                    <circle cx="12" cy="12" r="2" />
                   </svg>
                   Target File Size
                 </h3>
                 <p class="settings-desc">Automatically find the quality to fit under a specific size</p>
                 <div class="compressor-target-row">
-                  <input type="number" id="compressor-target-size" value="500" min="1" max="99999" class="compressor-target-input" />
+                  <input type="number" id="compressor-target-size" value="500" min="1" max="99999"
+                    class="compressor-target-input" />
                   <select id="compressor-target-unit" class="compressor-target-select">
                     <option value="KB" selected>KB</option>
                     <option value="MB">MB</option>
                   </select>
-                  <button id="compressor-apply-target" class="btn btn-primary btn-sm compressor-apply-btn">Apply</button>
+                  <button id="compressor-apply-target"
+                    class="btn btn-primary btn-sm compressor-apply-btn">Apply</button>
                 </div>
                 <p id="compressor-target-status" class="compressor-target-status" style="display: none;"></p>
               </div>
@@ -1520,8 +1536,10 @@
               <!-- Output Format -->
               <div class="compressor-section">
                 <h3>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                   </svg>
                   Output Format
                 </h3>
@@ -1544,11 +1562,13 @@
               <!-- Resize -->
               <div class="compressor-section">
                 <h3>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
-                    <polyline points="15 3 21 3 21 9"/>
-                    <polyline points="9 21 3 21 3 15"/>
-                    <line x1="21" y1="3" x2="14" y2="10"/>
-                    <line x1="3" y1="21" x2="10" y2="14"/>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
                   </svg>
                   Resize
                 </h3>
@@ -1560,12 +1580,14 @@
                   <div class="compressor-resize-inputs">
                     <div class="input-group">
                       <label for="compressor-resize-width">Width (px)</label>
-                      <input type="number" id="compressor-resize-width" min="1" max="15360" class="compressor-resize-input" />
+                      <input type="number" id="compressor-resize-width" min="1" max="15360"
+                        class="compressor-resize-input" />
                     </div>
                     <span class="custom-res-x">×</span>
                     <div class="input-group">
                       <label for="compressor-resize-height">Height (px)</label>
-                      <input type="number" id="compressor-resize-height" min="1" max="8640" class="compressor-resize-input" />
+                      <input type="number" id="compressor-resize-height" min="1" max="8640"
+                        class="compressor-resize-input" />
                     </div>
                   </div>
                   <label class="aspect-lock" style="margin-top: 8px;">
@@ -1583,7 +1605,8 @@
                   </div>
                   <div class="compressor-stat-item">
                     <span class="compressor-stat-label">COMPRESSED</span>
-                    <span id="compressor-stat-compressed" class="compressor-stat-value compressor-stat-highlight">—</span>
+                    <span id="compressor-stat-compressed"
+                      class="compressor-stat-value compressor-stat-highlight">—</span>
                   </div>
                   <div class="compressor-stat-item">
                     <span class="compressor-stat-label">SAVED</span>
@@ -1598,12 +1621,14 @@
 
               <!-- Compress & Download Button -->
               <div style="margin-top: 0.5rem;">
-                <button id="compressor-download-btn" class="btn btn-primary btn-lg btn-full btn-glow compressor-download-btn">
+                <button id="compressor-download-btn"
+                  class="btn btn-primary btn-lg btn-full btn-glow compressor-download-btn">
                   <span class="btn-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
                   </span>
                   Compress & Download
@@ -1729,10 +1754,11 @@
         <div class="result-actions-panel">
           <div class="panel-header">
             <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
-                <line x1="18" y1="20" x2="18" y2="10"/>
-                <line x1="12" y1="20" x2="12" y2="4"/>
-                <line x1="6" y1="20" x2="6" y2="14"/>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: text-bottom;">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
               </svg>
               Enhancement Results
             </h3>
@@ -1789,9 +1815,10 @@
             <!-- Image Compress (Middle) -->
             <button id="btn-compress-result" class="btn btn-primary btn-lg btn-full btn-glow btn-compress-result">
               <span class="btn-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="16 18 22 12 16 6"/>
-                  <polyline points="8 6 2 12 8 18"/>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
                 </svg>
               </span>
               Image Compress
@@ -1895,27 +1922,35 @@
       <div class="about-content">
         <details class="faq-item">
           <summary><strong>Is Zenpick really a free image enhancer?</strong></summary>
-          <p>Yes! Zenpick is a 100% free image enhancer. There are no hidden charges, no premium tiers, and no usage limits. You can enhance, upscale, edit, and compress unlimited images — all completely free.</p>
+          <p>Yes! Zenpick is a 100% free image enhancer. There are no hidden charges, no premium tiers, and no usage
+            limits. You can enhance, upscale, edit, and compress unlimited images — all completely free.</p>
         </details>
         <details class="faq-item">
           <summary><strong>Do I need to sign in or create an account?</strong></summary>
-          <p>No. Zenpick requires no sign-in, no registration, and no account creation. Just visit the website and start enhancing your images immediately — free image enhance online with no sign in.</p>
+          <p>No. Zenpick requires no sign-in, no registration, and no account creation. Just visit the website and start
+            enhancing your images immediately — free image enhance online with no sign in.</p>
         </details>
         <details class="faq-item">
           <summary><strong>Can I enhance images to 4K or 8K for free?</strong></summary>
-          <p>Absolutely! Zenpick lets you upscale and enhance images to 4K (3840×2160) and 8K (7680×4320) resolution completely free. Our AI-powered super resolution technology produces stunning results.</p>
+          <p>Absolutely! Zenpick lets you upscale and enhance images to 4K (3840×2160) and 8K (7680×4320) resolution
+            completely free. Our AI-powered super resolution technology produces stunning results.</p>
         </details>
         <details class="faq-item">
           <summary><strong>Is Zenpick an online image editor?</strong></summary>
-          <p>Yes. Zenpick is a full-featured free online image editor. You can adjust brightness, contrast, saturation, sharpening, apply noise reduction, HDR effects, and fine-tune RGB color curves — all free, no sign-in required.</p>
+          <p>Yes. Zenpick is a full-featured free online image editor. You can adjust brightness, contrast, saturation,
+            sharpening, apply noise reduction, HDR effects, and fine-tune RGB color curves — all free, no sign-in
+            required.</p>
         </details>
         <details class="faq-item">
           <summary><strong>Can I compress images with Zenpick?</strong></summary>
-          <p>Yes. Zenpick includes a free image compressor that can reduce your image file size by up to 90% while preserving high visual quality. Perfect for web optimization, email attachments, and saving storage space.</p>
+          <p>Yes. Zenpick includes a free image compressor that can reduce your image file size by up to 90% while
+            preserving high visual quality. Perfect for web optimization, email attachments, and saving storage space.
+          </p>
         </details>
         <details class="faq-item">
           <summary><strong>Are my images safe and private?</strong></summary>
-          <p>Absolutely. All image processing happens 100% in your browser on your own device. Your images are never uploaded to any server. Zenpick ensures complete privacy and security for all your photos.</p>
+          <p>Absolutely. All image processing happens 100% in your browser on your own device. Your images are never
+            uploaded to any server. Zenpick ensures complete privacy and security for all your photos.</p>
         </details>
       </div>
     </section>
@@ -1924,9 +1959,18 @@
     <section id="about-section" class="about-section">
       <h2 class="section-title">About <span class="gradient-text">Zenpick</span></h2>
       <div class="about-content">
-        <p>Zenpick is a professional-grade, <strong>free AI image enhancer</strong>, <strong>online photo editor</strong>, and <strong>image compressor</strong> designed to bring your low-resolution photos to life. Using advanced machine learning, we help users <strong>upscale images to 4K and 8K</strong>, sharpen blurry photos, restore old pictures, and edit details directly in the browser — no software installation required.</p>
-        <p>Unlike other tools, Zenpick is a truly <strong>free image enhancer online with no sign-in</strong> required. There are no accounts to create, no watermarks added to your output, and no limits on how many images you can enhance. Whether you need a <strong>free image editor</strong>, a <strong>free image compressor</strong>, or a powerful <strong>AI image enhancer</strong> — Zenpick does it all in your browser.</p>
-        <p>Our mission is to provide high-quality <strong>image enhancement, photo editing, and compression</strong> that is fast, private, and 100% free for everyone. All processing is executed locally on your device to ensure maximum privacy — your images never leave your computer.</p>
+        <p>Zenpick is a professional-grade, <strong>free AI image enhancer</strong>, <strong>online photo
+            editor</strong>, and <strong>image compressor</strong> designed to bring your low-resolution photos to life.
+          Using advanced machine learning, we help users <strong>upscale images to 4K and 8K</strong>, sharpen blurry
+          photos, restore old pictures, and edit details directly in the browser — no software installation required.
+        </p>
+        <p>Unlike other tools, Zenpick is a truly <strong>free image enhancer online with no sign-in</strong> required.
+          There are no accounts to create, no watermarks added to your output, and no limits on how many images you can
+          enhance. Whether you need a <strong>free image editor</strong>, a <strong>free image compressor</strong>, or a
+          powerful <strong>AI image enhancer</strong> — Zenpick does it all in your browser.</p>
+        <p>Our mission is to provide high-quality <strong>image enhancement, photo editing, and compression</strong>
+          that is fast, private, and 100% free for everyone. All processing is executed locally on your device to ensure
+          maximum privacy — your images never leave your computer.</p>
       </div>
     </section>
 
@@ -1938,7 +1982,12 @@
         <p class="footer-note">All processing is done locally in your browser. No files are uploaded to any server. No
           sign-in required. No watermark on output. Unlimited free image enhancement.</p>
         <div class="footer-seo-keywords">
-          <p>image enhance · free image enhance · image free enhance online · free image enhance online · image enhance free online with no sign in · image editor · online image editor · free image editor · image compressor · free image compressor · zenpick · zinpick · zenpick image enhancer · zinpick image enhancer · free image enhance 4k · free image enhance 8k · AI image enhancer · free image upscaler · upscale image free · enhance image quality · sharpen blurry photos · restore old pictures · online photo editor · free photo editor · no sign-in · no watermark · browser-based</p>
+          <p>image enhance · free image enhance · image free enhance online · free image enhance online · image enhance
+            free online with no sign in · image editor · online image editor · free image editor · image compressor ·
+            free image compressor · zenpick · zinpick · zenpick image enhancer · zinpick image enhancer · free image
+            enhance 4k · free image enhance 8k · AI image enhancer · free image upscaler · upscale image free · enhance
+            image quality · sharpen blurry photos · restore old pictures · online photo editor · free photo editor · no
+            sign-in · no watermark · browser-based</p>
         </div>
         <div class="footer-help">
           <a href="https://docs.google.com/forms/d/e/1FAIpQLScf7r2wb_Qu_5dg_kuncd3BXcTVhUefNP0kiIZK56KjSbeUtQ/viewform?usp=sharing&ouid=114795145231453088126"
@@ -1986,7 +2035,7 @@
     <script>
       // Dynamic cache-buster: inject main.js with a unique timestamp
       // to guarantee the browser never executes stale cached files
-      (function() {
+      (function () {
         var s = document.createElement('script');
         s.src = 'main.js?v=' + Date.now();
         s.defer = true;
@@ -1996,50 +2045,50 @@
 
     <div id=" debug-errors"
       style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a0000;color:#ff4444;padding:12px 16px;font-family:monospace;font-size:13px;z-index:99999;border-top:2px solid #ff0000;max-height:150px;overflow-y:auto;">
-    </div >
+    </div>
 
-          <script>
-            (function () {
-              // Show errors visually on the page
-              function showError(msg) {
-                var box = document.getElementById('debug-errors');
-                if (box) { box.style.display = 'block'; box.innerHTML += '<div>❌ ' + msg + '</div>'; }
-                console.error('[FAILSAFE] ' + msg);
-              }
+    <script>
+      (function () {
+        // Show errors visually on the page
+        function showError(msg) {
+          var box = document.getElementById('debug-errors');
+          if (box) { box.style.display = 'block'; box.innerHTML += '<div>❌ ' + msg + '</div>'; }
+          console.error('[FAILSAFE] ' + msg);
+        }
 
         // Catch ALL unhandled errors (but skip WASM/FFmpeg errors handled by Hardware Guard)
         window.addEventListener('error', function (e) {
           var msg = (e.message || '').toLowerCase();
-            // Skip WASM abort/OOM errors — these are caught by the Hardware Guard fallback system
-            if (msg.includes('abort') || msg.includes('oom') || msg.includes('runtimeerror') || msg.includes('memory')) {
-              console.warn('[FAILSAFE] Suppressed WASM error (handled by Hardware Guard):', e.message);
+          // Skip WASM abort/OOM errors — these are caught by the Hardware Guard fallback system
+          if (msg.includes('abort') || msg.includes('oom') || msg.includes('runtimeerror') || msg.includes('memory')) {
+            console.warn('[FAILSAFE] Suppressed WASM error (handled by Hardware Guard):', e.message);
             return;
           }
-            showError('JS Error: ' + e.message + ' at ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+          showError('JS Error: ' + e.message + ' at ' + (e.filename || '?') + ':' + (e.lineno || '?'));
         });
 
-            // Wait for DOM ready
-            window.addEventListener('DOMContentLoaded', function () {
+        // Wait for DOM ready
+        window.addEventListener('DOMContentLoaded', function () {
           var btn = document.getElementById('enhance-btn') || document.getElementById('btn-process');
-            console.log('[FAILSAFE] Checking for button...');
-            if (!btn) {
-              showError('Enhance button NOT FOUND in DOM! Checked #enhance-btn and #btn-process');
+          console.log('[FAILSAFE] Checking for button...');
+          if (!btn) {
+            showError('Enhance button NOT FOUND in DOM! Checked #enhance-btn and #btn-process');
             return;
           }
 
-            console.log('[FAILSAFE] Enhance button found. Using ID: ' + btn.id);
+          console.log('[FAILSAFE] Enhance button found. Using ID: ' + btn.id);
 
-            btn.addEventListener('click', function (e) {
-              console.log('[FAILSAFE] CLICK DETECTED on: ' + btn.id);
+          btn.addEventListener('click', function (e) {
+            console.log('[FAILSAFE] CLICK DETECTED on: ' + btn.id);
 
             // Visual indicator that click was at least heard by HTML
             var origBackground = btn.style.background;
             btn.style.background = '#00ff00';
-            setTimeout(function () {btn.style.background = origBackground; }, 200);
+            setTimeout(function () { btn.style.background = origBackground; }, 200);
           });
         });
       })();
-      </script>
+    </script>
 </body>
 
 </html>
