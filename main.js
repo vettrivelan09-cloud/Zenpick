@@ -7,30 +7,16 @@
     const splash = document.getElementById('splash-screen');
     if (splash) {
       splash.classList.add('fade-out');
-      setTimeout(() => {
-        if (splash.parentNode) splash.remove();
-        // Wait a few seconds for the main page to fully render and settle,
-        // THEN start heavy MediaPipe model loading during browser idle time.
-        // This prevents both the splash AND main page from lagging.
-        setTimeout(() => {
-          if (window.FaceMaskModule && window.FaceMaskModule.startDeferredInit) {
-            if ('requestIdleCallback' in window) {
-              requestIdleCallback(() => window.FaceMaskModule.startDeferredInit(), { timeout: 8000 });
-            } else {
-              window.FaceMaskModule.startDeferredInit();
-            }
-          }
-        }, 3000);
-      }, 500);
+      setTimeout(() => { if (splash.parentNode) splash.remove(); }, 700);
     }
   }
-  document.addEventListener('DOMContentLoaded', () => { setTimeout(hideSplash, 1200); });
-  setTimeout(hideSplash, 2000);
+  document.addEventListener('DOMContentLoaded', () => { setTimeout(hideSplash, 2800); });
+  setTimeout(hideSplash, 4000);
   setTimeout(() => {
     const splash = document.getElementById('splash-screen');
     if (splash) hideSplash();
     if (state.currentStep === 'upload') showStep('upload');
-  }, 2500);
+  }, 5000);
 
   window.onerror = function (message, source, lineno, colno, error) {
     console.error('GLOBAL ERROR:', message, 'at', source, lineno, ':', colno, error);
@@ -5320,6 +5306,16 @@ Please trim to under ${MAX_SECS}s using Clideo.com or Kapwing.com.`);
     aiState._wakeGuardRunning = true;
     console.log('[WakeGuard] Tab became visible — testing ONNX session health...');
     try {
+      // Re-check right before firing — the 200ms delay above closes most of the
+      // race window, but processing can still start in that gap (e.g. user
+      // switches tabs right as Enhance kicks off). This second check catches
+      // that remaining sliver instead of colliding with an in-flight tile.
+      if (aiState.processing) {
+        console.log('[WakeGuard] Processing started during settle delay — skipping probe');
+        aiState._sessionDiedDuringSleep = true;
+        aiState._wakeGuardRunning = false;
+        return;
+      }
       // The Real-ESRGAN model requires 64×64 tile inputs — using 1×1 causes
       // "Got invalid dimensions" errors even on a perfectly healthy session.
       // Use a proper 64×64 dummy tile (batch=1, 3 channels).
