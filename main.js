@@ -3904,6 +3904,38 @@
       localCtx.drawImage(canvas, 0, 0);
     }
 
+    // ── Subtle default tone tweak ──
+    // A gentle, ALWAYS-applied shadow-darken/highlight-lift, independent of the
+    // "HDR Effect" checkbox. Much weaker than the HDR filter (which uses 0.85/1.3
+    // multipliers — too strong for a default look). This just gives output a
+    // slightly richer, less washed-out feel by default.
+    //
+    // SKIPPED on low-RAM/CPU-fallback devices: this does a full-resolution
+    // getImageData/putImageData pass, which is an extra large memory allocation
+    // on top of everything else already running (ONNX tiles, post-sharpen, etc.).
+    // On constrained devices that's exactly what was causing
+    // "Out of memory at ImageData creation" crashes. Wrapped in try/catch too,
+    // as a safety net for any other device that hits memory pressure unexpectedly —
+    // better to skip a cosmetic tweak than crash the whole enhancement.
+    if (!isLowRAM) {
+      try {
+        const toneCtx = localCanvas.getContext('2d', { willReadFrequently: true });
+        const toneData = toneCtx.getImageData(0, 0, localCanvas.width, localCanvas.height);
+        const td = toneData.data;
+        for (let i = 0; i < td.length; i += 4) {
+          for (let c = 0; c < 3; c++) {
+            const v = td[i + c] / 255;
+            td[i + c] = clamp(255 * (v < 0.5 ? v * 0.96 : 0.5 + (v - 0.5) * 1.08));
+          }
+        }
+        toneCtx.putImageData(toneData, 0, 0);
+      } catch (toneErr) {
+        console.warn('[ONNX Image] Skipping default tone tweak (memory pressure):', toneErr?.message || toneErr);
+      }
+    } else {
+      console.log('[ONNX Image] Skipping default tone tweak on low-RAM device');
+    }
+
     // Copy result back to outputCanvas for export
     outputCanvas.width = onnxW; outputCanvas.height = onnxH;
     outputCanvas.getContext('2d').drawImage(localCanvas, 0, 0);
